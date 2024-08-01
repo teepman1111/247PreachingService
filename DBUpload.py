@@ -11,7 +11,7 @@ def main():
     #init variables
     api_service_name = "youtube"
     api_version = "v3"
-    API_KEY = "AIzaSyCcrIQvSDBV7_LIBwV1xC0aG1o1HgLBxOk"
+    API_KEY = ""
     channelid = input('Enter channel id here: ')
     
     #sets up authentication method for YT API
