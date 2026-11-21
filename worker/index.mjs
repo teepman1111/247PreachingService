@@ -1,6 +1,7 @@
 import { getRandomVideo } from './get-random-video.mjs';
 import { uploadChannel } from './upload-channel.mjs';
-import page from '../public/index.html';
+import page from '../public/church.html';
+import { approvedVideos } from './approved-videos.mjs';
 
 function catalog(bucket) {
   return {
@@ -9,7 +10,7 @@ function catalog(bucket) {
       let cursor;
       do {
         const result = await bucket.list({ cursor });
-        blobs.push(...result.objects);
+        blobs.push(...result.objects.filter(object => !object.key.startsWith('approved/')));
         cursor = result.truncated ? result.cursor : undefined;
       } while (cursor);
       return { blobs };
@@ -29,7 +30,9 @@ function catalog(bucket) {
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
-    if (pathname === '/') {
+    if (pathname === '/api/approved-videos') return approvedVideos(request, env);
+
+    if (['/', '/watch', '/signage'].includes(pathname)) {
       return new Response(page, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 

@@ -37,3 +37,5 @@ Data is stored in Netlify Blobs (key-value store), replacing the previous Fireba
 ## ChatGPT Sites hosting
 
 Build the Worker with `bash scripts/build-sites.sh`. The Site uses its own R2 catalog, so add your channels again if they were originally imported on Netlify. Set `ADMIN_TOKEN` and `YOUTUBE_API_KEY` as production secrets in Sites and redeploy to apply them. Then enter the same admin token in the site's import form.
+
+The owner-private church pilot uses `SITE_ADMIN_EMAIL` to authorize playlist edits. Set it to the owner's ChatGPT email in the Sites production environment. Approve individual YouTube links on the home page. `/watch` plays the approved list in order and `/signage` runs the same loop in a full-window, muted player. These flows work without a YouTube Data API key. Imported channel catalogs are separate from the approved list.
