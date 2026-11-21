@@ -1,6 +1,7 @@
 import { getRandomVideo } from './get-random-video.mjs';
 import { uploadChannel } from './upload-channel.mjs';
 import page from '../public/church.html';
+import sanctuaryArt from '../public/assets/sanctuary.webp';
 import { programRequest, readPlaybackProgram } from './program.mjs';
 import { approvedVideos, individuallyApprovedIds } from './approved-videos.mjs';
 
@@ -31,6 +32,11 @@ function catalog(bucket) {
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+    if (pathname === '/assets/sanctuary.webp' && request.method === 'GET') {
+      return new Response(sanctuaryArt, {
+        headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=3600' },
+      });
+    }
     if (pathname === '/api/playback' && request.method === 'GET') {
       const { videoIds, selection } = await readPlaybackProgram(env.BUCKET);
       const manual = selection ? [] : await individuallyApprovedIds(env.BUCKET);

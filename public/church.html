@@ -3,62 +3,206 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>24/7 Preaching</title>
+<meta name="theme-color" content="#f7f4eb">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
+  :root {
+    color-scheme: light;
+    --paper: #f7f4eb;
+    --card: #fffdf7;
+    --ink: #202e26;
+    --muted: #59635a;
+    --green: #264535;
+    --green-dark: #172c22;
+    --line: #dcded0;
+    --gold: #efdba2;
+    --serif: "Instrument Serif", Georgia, serif;
+    --sans: "DM Sans", system-ui, sans-serif;
+  }
+
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; background: #14181b; color: #f7f5ec; font: 1rem system-ui, sans-serif; }
-  main { max-width: 55rem; margin: auto; padding: clamp(1rem, 5vw, 4rem); }
-  header { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 2rem; }
-  h1 { margin: 0 auto 0 0; font-size: 1.4rem; }
-  a { color: #b6da9b; }
-  form, li { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
-  label { width: 100%; }
-  input, button { font: inherit; border-radius: .4rem; padding: .7rem; }
-  input { min-width: 0; flex: 1; background: #23292c; color: inherit; border: 1px solid #87918a; }
-  button { cursor: pointer; background: #b6da9b; color: #14181b; border: 0; }
-  button:disabled { opacity: .65; cursor: default; }
-  ul { list-style: none; padding: 0; }
-  li { justify-content: space-between; padding: .7rem 0; border-bottom: 1px solid #414b46; }
-  .program-section { padding-block: 1rem 1.5rem; border-top: 1px solid #414b46; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 1rem/1.5 var(--sans); }
+  main { width: min(100% - 3rem, 72rem); margin: 0 auto; padding-bottom: 4rem; }
+  a { color: var(--green); text-underline-offset: .2em; }
+  :focus-visible { outline: 2px solid #6a8260; outline-offset: 4px; }
+
+  #navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem 0;
+    margin-bottom: .35rem;
+  }
+  .brand { display: inline-flex; align-items: center; gap: .65rem; text-decoration: none; }
+  .brand-name { color: var(--ink); font: 1.75rem/1 var(--serif); white-space: nowrap; }
+  .brand-mark {
+    position: relative;
+    display: inline-block;
+    width: 2.15rem;
+    height: 2.4rem;
+    flex: none;
+    border-radius: 60% 60% .45rem .45rem;
+    background: var(--green);
+  }
+  .brand-mark::before, .brand-mark::after {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gold);
+    border-radius: 1px;
+    content: "";
+  }
+  .brand-mark::before { top: .6rem; width: .13rem; height: 1.18rem; }
+  .brand-mark::after { top: .95rem; width: .75rem; height: .13rem; }
+  .nav-links { display: flex; gap: .2rem; align-items: center; }
+  .nav-links a {
+    font-size: .9375rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-decoration: none;
+    border-radius: 99px;
+    padding: .6rem .9rem;
+  }
+  .nav-links a:hover { background: #ebece1; color: var(--green-dark); }
+  .nav-links a[aria-current="page"] { background: #e4e9db; color: var(--green-dark); }
+
+  .hero {
+    display: grid;
+    align-content: center;
+    min-height: 16.5rem;
+    padding: clamp(1.65rem, 5vw, 3.75rem);
+    background: linear-gradient(90deg, #172c22 9%, #172c22ed 29%, #172c2266 64%, #172c2226),
+      #172c22 url("/assets/sanctuary.webp") right 46% / cover no-repeat;
+    color: #fffaf0;
+    border: 1px solid #303e2c;
+    border-radius: 1.2rem;
+  }
+  .hero h1 { margin: 0; max-width: 14ch; font: clamp(3rem, 6.3vw, 5.5rem)/.94 var(--serif); }
+  .hero p { color: #eadfc8; max-width: 37ch; margin: .85rem 0 0; }
+  #watch .hero { min-height: 12rem; }
+
+  #program { display: grid; grid-template-columns: 1.08fr 1fr; gap: 1rem; margin-top: 1rem; align-items: start; }
+  .program-section {
+    min-width: 0;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    padding: clamp(1rem, 2.4vw, 1.75rem);
+  }
+  .program-section h2 { margin: 0 0 .85rem; font: 2rem/1.05 var(--serif); }
+  .manual-section { margin-top: 1rem; }
+  form, li { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem; }
+  label { width: 100%; font-size: .9375rem; font-weight: 600; }
+  input, button { font: inherit; border-radius: .55rem; padding: .62rem .82rem; }
+  input {
+    min-width: 0;
+    flex: 1 1 12rem;
+    background: #fbfbf4;
+    color: var(--ink);
+    border: 1px solid #b9c0b0;
+  }
+  input::placeholder { color: #68746a; }
+  button {
+    cursor: pointer;
+    background: var(--green);
+    color: #fffdf7;
+    border: 1px solid transparent;
+    font-weight: 600;
+  }
+  button:hover { background: var(--green-dark); }
+  button:disabled { opacity: .55; cursor: default; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { justify-content: space-between; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  #sources:not(:empty), #videos:not(:empty) { margin: .7rem 0; }
+  #sync-all, #clear-topic { margin-top: .65rem; }
+  #program-status:not(:empty) { margin: 1rem 0 0; padding: .7rem 1rem; background: #e4e9db; border-radius: .55rem; }
+  #program-status:empty, #admin-status:empty { margin: 0; }
   .topic-cloud, .source-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
-  .source-details { display: grid; gap: .3rem; overflow-wrap: anywhere; }
-  .secondary { background: #2a3530; color: #f7f5ec; border: 1px solid #87918a; }
-  .topic-cloud button { font-size: var(--topic-size); }
-  .supporting { color: #c4ccc7; }
-  .screen { aspect-ratio: 16 / 9; background: black; }
+  .source-details { display: grid; gap: .2rem; overflow-wrap: anywhere; min-width: 0; }
+  .secondary { background: #f2f4e9; color: var(--green-dark); border-color: #c3cdbb; }
+  .secondary:hover { background: #e4e9db; }
+  .topic-cloud button { background: #e8eddf; color: var(--green-dark); border-radius: 99px; font-size: var(--topic-size); }
+  .topic-cloud button:hover, .topic-cloud button[aria-pressed="true"] { background: var(--green); color: #fffdf7; }
+  .supporting, #weekly-program { color: var(--muted); }
+  #coverage { margin: -.35rem 0 .65rem; }
+  #weekly-program {
+    padding: .65rem .85rem;
+    background: #f0f1e7;
+    border-left: 2px solid #a69b64;
+    border-radius: .35rem;
+    margin: 0 0 .8rem;
+  }
+  #topic-empty { margin-bottom: 0; }
+  #publish-topic { margin-top: .8rem; justify-content: space-between; }
+  #topic-preview { margin: .25rem 0; }
+  #admin-status { color: var(--muted); }
+
+  .screen { aspect-ratio: 16 / 9; background: #121a14; margin-top: 1rem; border-radius: 1rem; overflow: hidden; }
   .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
-  body.signage { background: black; }
-  body.signage main { max-width: none; padding: 0; }
-  body.signage .screen { height: 100dvh; }
+  #now-playing-topic { margin: 1rem 0 0; font: 1.8rem/1.1 var(--serif); }
+  #play-status { color: var(--muted); }
+  body.signage { background: #000; }
+  body.signage main { width: 100%; padding: 0; }
+  body.signage .hero { display: none; }
+  body.signage .screen { height: 100dvh; margin: 0; border-radius: 0; background: #000; }
   #exit-signage { display: none; }
   body.signage #exit-signage {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
     position: fixed;
     top: 1rem;
     right: 1rem;
     z-index: 1;
-    padding: .65rem .9rem;
-    background: #14181b;
-    color: #f7f5ec;
+    padding: .5rem .9rem;
+    text-decoration: none;
+    background: var(--green-dark);
+    color: #fffaf0;
     border: 1px solid #87918a;
-    border-radius: .4rem;
+    border-radius: .55rem;
   }
-  #exit-signage:focus-visible { outline: 2px solid #b6da9b; outline-offset: 3px; }
-  body.signage #play-status { position: fixed; inset: auto 1rem 1rem; text-align: center; pointer-events: none; }
+  body.signage #play-status { color: #fffaf0; position: fixed; inset: auto 1rem 1rem; text-align: center; pointer-events: none; }
+
+  @media (max-width: 48rem) {
+    #program { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 33rem) {
+    main { width: calc(100% - 1.5rem); }
+    #navigation { align-items: flex-start; flex-direction: column; gap: .65rem; }
+    .nav-links a { padding: .55rem .7rem; }
+    .hero {
+      min-height: 14rem;
+      background-image: linear-gradient(90deg, #172c22f5 10%, #172c22b8 60%, #172c2240), url("/assets/sanctuary.webp");
+      background-position: center, 68% center;
+    }
+    #watch .hero { min-height: 10rem; }
+  }
 </style>
 <main>
   <header id="navigation">
-    <h1>24/7 Preaching</h1>
-    <a href="/">Programming</a>
-    <a href="/watch">Watch</a>
-    <a href="/signage">Signage</a>
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">24/7 Preaching</span>
+    </a>
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="/">Programming</a>
+      <a href="/watch">Watch</a>
+      <a href="/signage">Signage</a>
+    </nav>
   </header>
   <section id="admin" hidden>
-    <h2>Church programming</h2>
+    <div class="hero">
+      <h1>Church<br>programming</h1>
+      <p>Approve your sources, then choose a weekly topic for Watch and Signage.</p>
+    </div>
     <p id="program-status" role="status"></p>
     <section id="program" hidden>
       <section class="program-section">
-        <h3>Trusted sources</h3>
+        <h2>Trusted sources</h2>
         <form id="add-source">
           <label for="source">YouTube channel or playlist</label>
           <input id="source" required maxlength="512" placeholder="Channel link, @handle, or playlist link">
@@ -69,7 +213,7 @@
         <button type="button" id="sync-all" class="secondary" hidden>Sync all sources</button>
       </section>
       <section class="program-section">
-        <h3>Topic cloud</h3>
+        <h2>Topic cloud</h2>
         <p id="coverage" class="supporting"></p>
         <p id="weekly-program"></p>
         <div id="topics" class="topic-cloud" aria-label="Topics by number of matching videos"></div>
@@ -81,17 +225,23 @@
         <button type="button" id="clear-topic" class="secondary" hidden>Use all approved videos</button>
       </section>
     </section>
-    <h3>Individually approved videos</h3>
-    <form id="approve">
-      <label for="video">YouTube video link or ID</label>
-      <input id="video" required maxlength="512" placeholder="https://www.youtube.com/watch?v=…">
-      <button>Approve video</button>
-    </form>
-    <p id="admin-status" role="status"></p>
-    <ul id="videos"></ul>
+    <section class="program-section manual-section">
+      <h2>Individually approved videos</h2>
+      <form id="approve">
+        <label for="video">YouTube video link or ID</label>
+        <input id="video" required maxlength="512" placeholder="https://www.youtube.com/watch?v=…">
+        <button>Approve video</button>
+      </form>
+      <p id="admin-status" role="status"></p>
+      <ul id="videos"></ul>
+    </section>
   </section>
   <a id="exit-signage" href="/watch">Exit signage</a>
   <section id="watch" hidden>
+    <div class="hero">
+      <h1>Watch</h1>
+      <p>Preaching from your church’s approved sources.</p>
+    </div>
     <p id="now-playing-topic" hidden></p>
     <div class="screen"><div id="player"></div></div>
     <p id="play-status" role="status">Loading the approved loop…</p>
@@ -315,6 +465,9 @@
   });
 
   const signage = location.pathname === '/signage';
+  for (const link of document.querySelectorAll('.nav-links a')) {
+    if (link.pathname === location.pathname) link.setAttribute('aria-current', 'page');
+  }
   if (location.pathname === '/') {
     element('admin').hidden = false;
     const form = element('approve');
