@@ -22,22 +22,26 @@ function videoIdFromInput(input) {
   }
 }
 
+export async function individuallyApprovedIds(bucket) {
+  const videos = [];
+  let cursor;
+  do {
+    const page = await bucket.list({ prefix, cursor });
+    for (const { key, uploaded } of page.objects) {
+      videos.push({ id: key.slice(prefix.length), uploaded });
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  videos.sort((a, b) => new Date(a.uploaded) - new Date(b.uploaded) || a.id.localeCompare(b.id));
+  return videos.map(video => video.id);
+}
+
 export async function approvedVideos(request, env) {
   const respond = (body, status = 200) => Response.json(body, {
     status, headers: { 'Cache-Control': 'no-store' },
   });
   if (request.method === 'GET') {
-    const videos = [];
-    let cursor;
-    do {
-      const page = await env.BUCKET.list({ prefix, cursor });
-      for (const { key, uploaded } of page.objects) {
-        videos.push({ id: key.slice(prefix.length), uploaded });
-      }
-      cursor = page.truncated ? page.cursor : undefined;
-    } while (cursor);
-    videos.sort((a, b) => new Date(a.uploaded) - new Date(b.uploaded) || a.id.localeCompare(b.id));
-    return respond({ videoIds: videos.map(video => video.id) });
+    return respond({ videoIds: await individuallyApprovedIds(env.BUCKET) });
   }
 
   if (!['POST', 'DELETE'].includes(request.method)) {

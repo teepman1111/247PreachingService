@@ -19,6 +19,12 @@
   button:disabled { opacity: .65; cursor: default; }
   ul { list-style: none; padding: 0; }
   li { justify-content: space-between; padding: .7rem 0; border-bottom: 1px solid #414b46; }
+  .program-section { padding-block: 1rem 1.5rem; border-top: 1px solid #414b46; }
+  .topic-cloud, .source-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .source-details { display: grid; gap: .3rem; overflow-wrap: anywhere; }
+  .secondary { background: #2a3530; color: #f7f5ec; border: 1px solid #87918a; }
+  .topic-cloud button { font-size: var(--topic-size); }
+  .supporting { color: #c4ccc7; }
   .screen { aspect-ratio: 16 / 9; background: black; }
   .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
   body.signage { background: black; }
@@ -43,12 +49,50 @@
 <main>
   <header id="navigation">
     <h1>24/7 Preaching</h1>
-    <a href="/">Approved videos</a>
+    <a href="/">Programming</a>
     <a href="/watch">Watch</a>
     <a href="/signage">Signage</a>
   </header>
   <section id="admin" hidden>
-    <h2>Approved videos</h2>
+    <h2>Church programming</h2>
+    <p id="program-status" role="status"></p>
+    <section id="program" hidden>
+      <section class="program-section">
+        <h3>Trusted sources</h3>
+        <form id="add-source">
+          <label for="source">YouTube channel or playlist</label>
+          <input id="source" required maxlength="512" placeholder="Channel link, @handle, or playlist link">
+          <button>Approve source</button>
+        </form>
+        <p id="source-setup" class="supporting" hidden>Set YOUTUBE_API_KEY in Sites production secrets to import sources.</p>
+        <ul id="sources"></ul>
+        <button type="button" id="sync-all" class="secondary" hidden>Sync all sources</button>
+      </section>
+      <section class="program-section">
+        <h3>Transcript coverage</h3>
+        <p id="coverage"></p>
+        <form id="transcripts">
+          <label for="transcript-files">Upload transcripts named by video ID</label>
+          <input type="file" id="transcript-files" accept=".txt,.vtt,.srt" multiple required aria-describedby="transcript-help">
+          <button>Analyze transcripts</button>
+        </form>
+        <p id="transcript-help" class="supporting">Use the 11-character YouTube video ID as the filename, for example <code>dQw4w9WgXcQ.txt</code>. Upload transcripts you have permission to use.</p>
+        <p id="ai-setup" class="supporting" hidden>Set OPENAI_API_KEY in Sites production secrets to analyze transcripts.</p>
+        <ul id="transcript-results" aria-label="Transcript results"></ul>
+      </section>
+      <section class="program-section">
+        <h3>Topic cloud</h3>
+        <p id="weekly-program"></p>
+        <div id="topics" class="topic-cloud" aria-label="Topics by number of matching videos"></div>
+        <p id="topic-empty" class="supporting" hidden>Analyze transcripts from your trusted sources to build the topic cloud.</p>
+        <form id="publish-topic" hidden>
+          <p id="topic-preview"></p>
+          <button>Use this topic for the week</button>
+        </form>
+        <button type="button" id="clear-topic" class="secondary" hidden>Use all approved videos</button>
+      </section>
+    </section>
+    <h3>Individually approved videos</h3>
     <form id="approve">
       <label for="video">YouTube video link or ID</label>
       <input id="video" required maxlength="512" placeholder="https://www.youtube.com/watch?v=…">
@@ -59,6 +103,7 @@
   </section>
   <a id="exit-signage" href="/watch">Exit signage</a>
   <section id="watch" hidden>
+    <p id="now-playing-topic" hidden></p>
     <div class="screen"><div id="player"></div></div>
     <p id="play-status" role="status">Loading the approved loop…</p>
   </section>
@@ -110,6 +155,202 @@
     if (!ids.length) element('admin-status').textContent = 'No approved videos yet.';
   }
 
+  const programStatus = element('program-status');
+  let selectedTopic = null;
+  let working = false;
+
+  async function programApi(action, data) {
+    const response = await fetch('/api/program/' + action, data ? {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    } : { cache: 'no-store' });
+    if (response.status === 403 && action === 'summary') return null;
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not update the program.');
+    return result;
+  }
+
+  function actionButton(label, callback) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'secondary';
+    button.textContent = label;
+    button.onclick = () => runProgramAction(callback);
+    return button;
+  }
+
+  async function syncSource(source) {
+    let result;
+    do {
+      programStatus.textContent = 'Syncing ' + source.title + '…';
+      result = await programApi('sync-source', { key: source.key });
+    } while (result.more);
+    return result.total;
+  }
+
+  async function renderProgram() {
+    const data = await programApi('summary');
+    if (!data) return;
+    element('program').hidden = false;
+    element('source-setup').hidden = data.youtubeConfigured;
+    element('ai-setup').hidden = data.aiConfigured;
+    element('add-source').querySelector('button').disabled = !data.youtubeConfigured;
+    element('transcripts').querySelector('button').disabled = !data.aiConfigured;
+    element('coverage').textContent = data.analyzed + ' of ' + data.total +
+      ' unique videos analyzed · ' + (data.total - data.analyzed) + ' awaiting transcripts';
+    const list = element('sources');
+    list.replaceChildren();
+    for (const source of data.sources) {
+      const item = document.createElement('li');
+      const details = document.createElement('div');
+      details.className = 'source-details';
+      const title = document.createElement('strong');
+      title.textContent = source.title;
+      const count = document.createElement('span');
+      count.className = 'supporting';
+      count.textContent = (source.type === 'channel' ? 'Channel' : 'Playlist') + ' · ' +
+        source.total + ' videos · ' + source.analyzed + ' analyzed' +
+        (source.syncing ? ' · Sync incomplete' : '');
+      details.append(title, count);
+      const actions = document.createElement('div');
+      actions.className = 'source-actions';
+      const sync = actionButton(source.syncing ? 'Resume sync' : 'Sync', async () =>
+        'Synced ' + (await syncSource(source)) + ' videos from ' + source.title + '.');
+      sync.disabled = !data.youtubeConfigured;
+      actions.append(sync);
+      if (source.syncing) actions.append(actionButton('Discard partial sync', async () => {
+        await programApi('cancel-sync', { key: source.key });
+        return 'Partial sync discarded.';
+      }));
+      actions.append(actionButton('Remove', async () => {
+        await programApi('remove-source', { key: source.key });
+        return 'Source removed from your program.';
+      }));
+      item.append(details, actions);
+      list.append(item);
+    }
+    const syncAll = element('sync-all');
+    syncAll.hidden = !data.sources.length;
+    syncAll.disabled = !data.youtubeConfigured;
+    syncAll.onclick = () => runProgramAction(async () => {
+      const errors = [];
+      for (const source of data.sources) {
+        try {
+          await syncSource(source);
+        } catch (error) {
+          errors.push(source.title + ' — ' + error.message);
+        }
+      }
+      return errors.length ? errors.join(' ') : 'All trusted sources synced.';
+    });
+
+    element('weekly-program').textContent = data.selection
+      ? 'Current topic: ' + data.selection.topic + ' · Ends ' + new Date(data.selection.endsAt).toLocaleString()
+      : 'Watch and Signage are using all approved videos.';
+    element('clear-topic').hidden = !data.selection;
+    const cloud = element('topics');
+    cloud.replaceChildren();
+    element('topic-empty').hidden = Boolean(data.topics.length);
+    if (!data.topics.some(topic => topic.name === selectedTopic)) selectedTopic = null;
+    function showTopic() {
+      const topic = data.topics.find(topic => topic.name === selectedTopic);
+      element('publish-topic').hidden = !topic;
+      if (topic) element('topic-preview').textContent = topic.name + ' · ' +
+        topic.count + ' matching ' + (topic.count === 1 ? 'video' : 'videos');
+      for (const button of cloud.children) {
+        button.setAttribute('aria-pressed', String(button.dataset.topic === selectedTopic));
+      }
+    }
+    for (const topic of data.topics) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.topic = topic.name;
+      button.textContent = topic.name + ' (' + topic.count + ')';
+      button.style.setProperty('--topic-size', Math.min(1.8, 1 + 0.16 * Math.log2(topic.count)) + 'rem');
+      button.onclick = () => { selectedTopic = topic.name; showTopic(); };
+      cloud.append(button);
+    }
+    showTopic();
+  }
+
+  async function runProgramAction(action) {
+    if (working) return;
+    working = true;
+    const program = element('program');
+    program.setAttribute('aria-busy', 'true');
+    const controls = [...program.querySelectorAll('button:not(:disabled)')];
+    controls.forEach(button => { button.disabled = true; });
+    let message;
+    try {
+      message = await action();
+    } catch (error) {
+      message = error.message;
+    }
+    controls.forEach(button => { button.disabled = false; });
+    try {
+      await renderProgram();
+    } catch (error) {
+      message += ' ' + error.message;
+    } finally {
+      program.removeAttribute('aria-busy');
+      working = false;
+      programStatus.textContent = message;
+    }
+  }
+
+  element('add-source').onsubmit = event => {
+    event.preventDefault();
+    runProgramAction(async () => {
+      const input = element('source');
+      const source = input.value.trim();
+      programStatus.textContent = 'Looking up the source…';
+      const { key } = await programApi('add-source', { source });
+      input.value = '';
+      const count = await syncSource({ key, title: source });
+      return 'Source approved. Imported ' + count + ' videos.';
+    });
+  };
+
+  element('transcripts').onsubmit = event => {
+    event.preventDefault();
+    runProgramAction(async () => {
+      const files = [...element('transcript-files').files];
+      const results = element('transcript-results');
+      results.replaceChildren();
+      let analyzed = 0;
+      for (const [index, file] of files.entries()) {
+        programStatus.textContent = 'Analyzing transcript ' + (index + 1) + ' of ' + files.length + '…';
+        const item = document.createElement('li');
+        try {
+          const name = file.name.match(/^([A-Za-z0-9_-]{11})\.(txt|vtt|srt)$/i);
+          if (!name) throw new Error('Name the transcript file with its 11-character video ID.');
+          if (file.size > 1400000) throw new Error('Transcript file is too large.');
+          const result = await programApi('analyze', { videoId: name[1], transcript: await file.text() });
+          item.textContent = file.name + ' · ' + (result.tags.join(', ') || 'No matching topic');
+          analyzed++;
+        } catch (error) {
+          item.textContent = file.name + ' · ' + error.message;
+        }
+        results.append(item);
+      }
+      element('transcript-files').value = '';
+      return 'Indexed ' + analyzed + ' of ' + files.length + ' transcripts.';
+    });
+  };
+
+  element('publish-topic').onsubmit = event => {
+    event.preventDefault();
+    runProgramAction(async () => {
+      const { selection } = await programApi('publish', { topic: selectedTopic });
+      return selection.topic + ' is now playing on Watch and Signage.';
+    });
+  };
+  element('clear-topic').onclick = () => runProgramAction(async () => {
+    await programApi('publish', { topic: null });
+    return 'Watch and Signage are using all approved videos.';
+  });
+
   const signage = location.pathname === '/signage';
   if (location.pathname === '/') {
     element('admin').hidden = false;
@@ -129,6 +370,7 @@
         button.disabled = false;
       }
     };
+    renderProgram().catch(error => { programStatus.textContent = error.message; });
     renderVideos().catch(error => { element('admin-status').textContent = error.message; });
   } else {
     element('watch').hidden = false;
@@ -150,11 +392,16 @@
     if (loading) return;
     loading = true;
     try {
-      const ids = await readVideos();
+      const response = await fetch('/api/playback', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not load the approved loop.');
+      const { videoIds: ids, selection } = await response.json();
+      const topic = element('now-playing-topic');
+      topic.hidden = signage || !selection;
+      topic.textContent = selection?.topic ?? '';
       const start = ids.indexOf(current) + 1;
       const next = [...ids.slice(start), ...ids.slice(0, start)].find(id => !failed.has(id));
       if (!next) {
-        playStatus.textContent = ids.length ? 'Waiting to retry unavailable videos…' : 'No approved videos yet.';
+        playStatus.textContent = ids.length ? 'Waiting to retry unavailable videos…' : (selection ? 'No approved videos match ' + selection.topic + '.' : 'No approved videos yet.');
         failed.clear();
         setTimeout(advance, 30000);
         return;

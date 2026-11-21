@@ -39,3 +39,28 @@ Data is stored in Netlify Blobs (key-value store), replacing the previous Fireba
 Build the Worker with `bash scripts/build-sites.sh`. The Site uses its own R2 catalog, so add your channels again if they were originally imported on Netlify. Set `ADMIN_TOKEN` and `YOUTUBE_API_KEY` as production secrets in Sites and redeploy to apply them. Then enter the same admin token in the site's import form.
 
 The owner-private church pilot uses `SITE_ADMIN_EMAIL` to authorize playlist edits. Set it to the owner's ChatGPT email in the Sites production environment. Approve individual YouTube links on the home page. `/watch` plays the approved list in order and `/signage` runs the same loop in a full-window, muted player. These flows work without a YouTube Data API key. Imported channel catalogs are separate from the approved list.
+
+### Trusted sources and weekly topics
+
+The private pilot accepts multiple channels and playlists on **Programming**. Set
+`YOUTUBE_API_KEY` (YouTube Data API v3) and `OPENAI_API_KEY` as Sites production
+secrets, then redeploy to apply them. The existing `SITE_ADMIN_EMAIL` authorizes
+programming changes.
+
+Approving a source imports its embeddable public or unlisted videos. Use **Sync
+all sources** to pick up new uploads or reflect videos removed from a source.
+The previous completed catalog stays active if a sync is interrupted. Resume
+the sync or discard the partial result from the source row.
+
+Upload authorized TXT, VTT, or SRT transcript files named with their YouTube
+video IDs (for example, `dQw4w9WgXcQ.txt`). The same video counts once even if it
+appears in multiple sources. The app sends transcript text to OpenAI for topic
+classification and persists the resulting topic tags and transcript hash.
+YouTube source sync does not retrieve captions. Videos without transcripts are
+available in the all-approved loop and do not count toward transcript topics.
+
+Select a topic in the cloud and publish it to Watch and Signage for seven days.
+The active topic uses the current set of matching videos from trusted sources.
+After it expires, both players return to all approved videos. Source removal
+excludes its videos unless another trusted source also supplies them. Existing
+individually approved videos remain in the all-approved loop.
