@@ -64,11 +64,14 @@ export async function loadSourcePage(apiKey, playlistId, cursor) {
   });
   if (!Array.isArray(page.items)) throw new Error('YouTube returned an incomplete playlist page. Try again.');
   const ids = [...new Set(page.items.map(item => item.contentDetails?.videoId).filter(id => videoIdPattern.test(id ?? '')))];
-  if (!ids.length) return { ids, cursor: page.nextPageToken ?? null };
+  if (!ids.length) return { ids, titles: {}, cursor: page.nextPageToken ?? null };
 
-  const details = await youtube(apiKey, 'videos', { part: 'status', id: ids.join(',') });
+  const details = await youtube(apiKey, 'videos', { part: 'status,snippet', id: ids.join(',') });
   if (!Array.isArray(details.items)) throw new Error('YouTube returned incomplete video details. Try again.');
-  const eligible = new Set(details.items.filter(item => item.status?.embeddable &&
-    ['public', 'unlisted'].includes(item.status.privacyStatus)).map(item => item.id));
-  return { ids: ids.filter(id => eligible.has(id)), cursor: page.nextPageToken ?? null };
+  const eligible = details.items.filter(item => item.status?.embeddable &&
+    ['public', 'unlisted'].includes(item.status.privacyStatus));
+  const eligibleIds = new Set(eligible.map(item => item.id));
+  const titles = Object.fromEntries(eligible.filter(item => typeof item.snippet?.title === 'string')
+    .map(item => [item.id, item.snippet.title]));
+  return { ids: ids.filter(id => eligibleIds.has(id)), titles, cursor: page.nextPageToken ?? null };
 }

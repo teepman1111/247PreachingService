@@ -1,11 +1,8 @@
 import { loadSourcePage, parseSource, resolveSource } from './youtube-sources.mjs';
-import { captionsConfigured, readYouTubeTranscript } from './youtube-captions.mjs';
-import { classifyTranscript, topics, transcriptHash } from './transcript-topics.mjs';
+import { titleMatchesTopic, topicsForTitle } from './title-topics.mjs';
 
 const programKey = 'program/catalog.json';
 const week = 7 * 24 * 60 * 60 * 1000;
-const maxTranscript = 350000;
-const captionLeaseTime = 3 * 60 * 1000;
 
 class ProgramError extends Error {
   constructor(message, status) {
@@ -22,7 +19,7 @@ async function readProgram(bucket) {
   const object = await bucket.get(programKey);
   return object
     ? { program: await object.json(), etag: object.etag }
-    : { program: { sources: [], analyses: {}, selection: null }, etag: null };
+    : { program: { sources: [], selection: null }, etag: null };
 }
 
 async function changeProgram(bucket, change) {
@@ -38,16 +35,18 @@ async function changeProgram(bucket, change) {
   throw new ProgramError('The catalog changed at the same time. Try again.', 409);
 }
 
-function catalogIds(program) {
-  return new Set(program.sources.flatMap(source => source.videoIds));
-}
-
-function analysisFor(program, id) {
-  return Object.hasOwn(program.analyses, id) ? program.analyses[id] : undefined;
-}
-
-function captionCheckFor(program, id) {
-  return program.captionChecks && Object.hasOwn(program.captionChecks, id) ? program.captionChecks[id] : undefined;
+function catalog(program) {
+  const videos = new Map();
+  for (const source of program.sources) {
+    for (const id of source.videoIds) {
+      const previous = videos.get(id);
+      const title = source.titles && Object.hasOwn(source.titles, id) ? source.titles[id] : '';
+      if (!previous || (title && (!previous.title || source.syncedAt >= previous.syncedAt))) {
+        videos.set(id, { title, syncedAt: source.syncedAt });
+      }
+    }
+  }
+  return videos;
 }
 
 function currentSelection(program) {
@@ -55,34 +54,30 @@ function currentSelection(program) {
 }
 
 function describeProgram(program, env) {
-  const ids = catalogIds(program);
+  const videos = catalog(program);
   const counts = new Map();
-  let analyzed = 0;
-  let unavailable = 0;
-  for (const id of ids) {
-    const analysis = analysisFor(program, id);
-    if (!analysis) {
-      if (captionCheckFor(program, id)?.retryAt > Date.now()) unavailable++;
-      continue;
-    }
-    analyzed++;
-    for (const topic of analysis.tags) counts.set(topic, (counts.get(topic) ?? 0) + 1);
+  let matched = 0;
+  let titlesAvailable = 0;
+  for (const { title } of videos.values()) {
+    if (!title) continue;
+    titlesAvailable++;
+    const tags = topicsForTitle(title);
+    if (tags.length) matched++;
+    for (const topic of tags) counts.set(topic, (counts.get(topic) ?? 0) + 1);
   }
   return {
-    sources: program.sources.map(({ key, type, title, videoIds, syncedAt, pending }) => ({
+    sources: program.sources.map(({ key, type, title, videoIds, titles, syncedAt, pending }) => ({
       key, type, title, syncedAt, syncing: Boolean(pending),
       total: videoIds.length,
-      analyzed: videoIds.filter(id => Object.hasOwn(program.analyses, id)).length,
+      needsTitleSync: Boolean(videoIds.length && !titles),
     })),
-    total: ids.size,
-    analyzed,
-    unavailable,
-    captionsConfigured: captionsConfigured(env),
+    total: videos.size,
+    matched,
+    titlesAvailable,
     topics: [...counts].map(([name, count]) => ({ name, count }))
       .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name)),
     selection: currentSelection(program),
     youtubeConfigured: Boolean(env.YOUTUBE_API_KEY),
-    aiConfigured: Boolean(env.OPENAI_API_KEY),
   };
 }
 
@@ -103,82 +98,38 @@ async function syncSource(env, key) {
   const { program } = await readProgram(env.BUCKET);
   const source = program.sources.find(item => item.key === key);
   if (!source) throw new ProgramError('That source is no longer approved.', 404);
-  const page = await loadSourcePage(env.YOUTUBE_API_KEY, source.playlistId, source.pending?.cursor);
+  // Restart a pre-title partial import so every page contributes its titles.
+  const pending = source.pending?.titles ? source.pending : null;
+  const page = await loadSourcePage(env.YOUTUBE_API_KEY, source.playlistId, pending?.cursor);
   return changeProgram(env.BUCKET, latest => {
     const current = latest.sources.find(item => item.key === key);
     if (!current || current.revision !== source.revision) {
       throw new ProgramError('This source changed during the import. Try syncing it again.', 409);
     }
-    const videoIds = [...new Set([...(current.pending?.videoIds ?? []), ...page.ids])];
+    const videoIds = [...new Set([...(pending?.videoIds ?? []), ...page.ids])];
+    const titles = { ...pending?.titles, ...page.titles };
     current.revision = crypto.randomUUID();
     if (page.cursor) {
-      current.pending = { cursor: page.cursor, videoIds };
+      current.pending = { cursor: page.cursor, videoIds, titles };
     } else {
       current.pending = null;
       current.videoIds = videoIds;
+      current.titles = titles;
       current.syncedAt = new Date().toISOString();
     }
     return { more: Boolean(page.cursor), total: videoIds.length };
   });
 }
 
-async function indexNextCaption(env, retryUnavailable) {
-  const bucket = env.BUCKET;
-  const { program } = await readProgram(bucket);
-  const nextId = current => [...catalogIds(current)].find(id =>
-    !analysisFor(current, id) && !(captionCheckFor(current, id)?.retryAt > Date.now()));
-  if (!retryUnavailable && !nextId(program)) return { outcome: 'done' };
-
-  const claim = crypto.randomUUID();
-  const id = await changeProgram(bucket, latest => {
-    const now = Date.now();
-    if (latest.captionLease?.expiresAt > now) {
-      throw new ProgramError('Caption indexing is already running. Try again in a moment.', 409);
-    }
-    if (retryUnavailable) latest.captionChecks = {};
-    const pendingId = nextId(latest);
-    if (pendingId) latest.captionLease = { claim, expiresAt: now + captionLeaseTime };
-    return pendingId;
-  });
-  if (!id) return { outcome: 'done' };
-
-  try {
-    const result = await readYouTubeTranscript(env, id);
-    const transcript = result.transcript;
-    const analysis = transcript && transcript.length <= maxTranscript ? {
-      hash: await transcriptHash(transcript),
-      tags: await classifyTranscript(env.OPENAI_API_KEY, transcript),
-    } : null;
-    return await changeProgram(bucket, latest => {
-      if (latest.captionLease?.claim !== claim) {
-        throw new ProgramError('Caption indexing moved to another request. Resume indexing to continue.', 409);
-      }
-      delete latest.captionLease;
-      if (!catalogIds(latest).has(id) || analysisFor(latest, id)) return { outcome: 'skipped' };
-      if (analysis) {
-        latest.analyses[id] = analysis;
-        return { outcome: 'indexed' };
-      }
-      latest.captionChecks ??= {};
-      latest.captionChecks[id] = { reason: result.reason ?? 'too-long', retryAt: Date.now() + week };
-      return { outcome: 'unavailable' };
-    });
-  } catch (error) {
-    // A failed provider call leaves the video queued for retry. The lease also expires if the request is interrupted.
-    await changeProgram(bucket, latest => {
-      if (latest.captionLease?.claim === claim) delete latest.captionLease;
-    }).catch(() => {});
-    throw error;
-  }
-}
-
 export async function readPlaybackProgram(bucket) {
   const { program } = await readProgram(bucket);
   const selection = currentSelection(program);
-  const ids = [...catalogIds(program)];
+  const videos = catalog(program);
   return {
     selection,
-    videoIds: selection ? ids.filter(id => analysisFor(program, id)?.tags.includes(selection.topic)) : ids,
+    videoIds: selection
+      ? [...videos].filter(([, { title }]) => titleMatchesTopic(title, selection.topic)).map(([id]) => id)
+      : [...videos.keys()],
   };
 }
 
@@ -225,18 +176,13 @@ export async function programRequest(request, env, action) {
           }
           return { ok: true };
         }));
-      case 'index-next':
-        if (!env.OPENAI_API_KEY) throw new ProgramError('Configure OPENAI_API_KEY in Sites to index topics.', 503);
-        if (!captionsConfigured(env)) throw new ProgramError('Connect a YouTube account with caption access to index topics.', 503);
-        return respond(await indexNextCaption(env, body.retryUnavailable === true));
       case 'publish':
         return respond(await changeProgram(env.BUCKET, program => {
           if (body.topic === null) {
             program.selection = null;
             return { selection: null };
           }
-          if (!topics.includes(body.topic) ||
-              ![...catalogIds(program)].some(id => analysisFor(program, id)?.tags.includes(body.topic))) {
+          if (![...catalog(program).values()].some(({ title }) => titleMatchesTopic(title, body.topic))) {
             throw new ProgramError('This topic has no matching videos from approved sources.', 409);
           }
           const selection = { topic: body.topic, endsAt: new Date(Date.now() + week).toISOString() };
@@ -251,7 +197,7 @@ export async function programRequest(request, env, action) {
     // External failures can include a credential-bearing URL in the original error.
     return respond({ error: error instanceof TypeError || error.name === 'TimeoutError'
       ? 'An upstream service could not respond. Try again.'
-      : error.message.startsWith('YouTube ') || error.message.startsWith('AI topic analysis ')
+      : error.message.startsWith('YouTube ')
         ? error.message : 'Could not update the program. Try again.' }, 502);
   }
 }

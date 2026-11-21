@@ -42,31 +42,20 @@ The owner-private church pilot uses `SITE_ADMIN_EMAIL` to authorize playlist edi
 
 ### Trusted sources and weekly topics
 
-The private pilot accepts multiple channels and playlists on **Programming**. Set
-`YOUTUBE_API_KEY` (YouTube Data API v3) and `OPENAI_API_KEY` as Sites production
-secrets, then redeploy to apply them. The existing `SITE_ADMIN_EMAIL` authorizes
+The private pilot accepts multiple channels and playlists on **Programming**.
+Configure `YOUTUBE_API_KEY` (YouTube Data API v3) as a Sites production
+secret and redeploy to apply it. The existing `SITE_ADMIN_EMAIL` authorizes
 programming changes.
 
-Approving a source imports its embeddable public or unlisted videos. Use **Sync
-all sources** to pick up new uploads or reflect videos removed from a source.
-The previous completed catalog stays active if a sync is interrupted. Resume
-the sync or discard the partial result from the source row.
+Approving a source imports its embeddable public or unlisted videos and their
+titles. The topic cloud matches recognized English words and phrases in the
+titles. Generic titles can remain unmatched. A video contributes only once to
+a topic even when it appears in several sources.
 
-For automatic caption access, configure `YOUTUBE_OAUTH_CLIENT_ID`,
-`YOUTUBE_OAUTH_CLIENT_SECRET`, and `YOUTUBE_OAUTH_REFRESH_TOKEN` as Sites
-production secrets. Obtain the refresh token through Google OAuth using the
-`https://www.googleapis.com/auth/youtube.force-ssl` scope, offline access, and
-an account authorized to edit the videos. YouTube's official API only allows
-caption downloads for videos the connected account can edit. Approving a public
-channel or playlist does not grant that access.
-
-Programming automatically checks unindexed videos when it opens or when a
-source finishes syncing. Keep Programming open while indexing runs. The
-app downloads accessible caption tracks, sends their text to OpenAI for topic
-classification, and retains only topic tags and a transcript hash. Videos
-without accessible captions remain eligible for the all-approved loop.
-Use **Recheck caption access** after obtaining new permissions. Indexing is
-deduplicated by video ID and pauses on provider or quota errors.
+Opening Programming refreshes sources imported before titles were stored. Use
+**Sync all sources** to pick up new uploads, title edits, and removals. The
+previous completed catalog stays active if a sync is interrupted. Resume the
+sync or discard the partial result from the source row.
 
 Select a topic in the cloud and publish it to Watch and Signage for seven days.
 The active topic uses the current set of matching videos from trusted sources.
