@@ -1,36 +1,38 @@
 import { getStore } from '@netlify/blobs';
 
 export default async (req) => {
+  const query = new URL(req.url).searchParams;
+  const previous = query.get('previous');
+  const skipped = new Set(query.getAll('skip'));
   const store = getStore('yt-videos');
+  let replay;
+
   const { blobs } = await store.list();
+  // Sample channels without replacement so an empty or exhausted channel
+  // does not stop playback when another channel still has videos.
+  while (blobs.length) {
+    const index = Math.floor(Math.random() * blobs.length);
+    const [blob] = blobs.splice(index, 1);
+    const channel = await store.get(blob.key, { type: 'json' });
+    const videoIds = channel?.videoIds ?? [];
+    const channelTitle = channel?.channelTitle ?? blob.key;
+    const candidates = videoIds.filter(id => id !== previous && !skipped.has(id));
 
-  if (blobs.length === 0) {
-    return Response.json(
-      { error: 'No videos found. Please upload a channel first.' },
-      { status: 404 }
-    );
+    if (candidates.length) {
+      const videoId = candidates[Math.floor(Math.random() * candidates.length)];
+      return Response.json({ videoId, url: `https://youtu.be/${videoId}`, channel: channelTitle });
+    }
+
+    if (previous && !skipped.has(previous) && videoIds.includes(previous)) {
+      replay = { videoId: previous, url: `https://youtu.be/${previous}`, channel: channelTitle };
+    }
   }
 
-  // Pick a random channel document
-  const randomBlob = blobs[Math.floor(Math.random() * blobs.length)];
-  const channelData = await store.get(randomBlob.key, { type: 'json' });
-
-  if (!channelData || !channelData.videoIds || channelData.videoIds.length === 0) {
-    return Response.json(
-      { error: 'No video IDs found in store.' },
-      { status: 404 }
-    );
-  }
-
-  // Pick a random video from that channel
-  const randomVideoId =
-    channelData.videoIds[Math.floor(Math.random() * channelData.videoIds.length)];
-
-  return Response.json({
-    videoId: randomVideoId,
-    url: `https://youtu.be/${randomVideoId}`,
-    channel: randomBlob.key,
-  });
+  if (replay) return Response.json(replay);
+  return Response.json(
+    { error: 'No available videos. Add a channel or select Next Video to retry.' },
+    { status: 404 },
+  );
 };
 
 export const config = {

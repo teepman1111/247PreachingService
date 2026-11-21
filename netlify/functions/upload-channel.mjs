@@ -1,8 +1,20 @@
+import { timingSafeEqual } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 
 export default async (req) => {
   if (req.method !== 'POST') {
     return Response.json({ error: 'POST required' }, { status: 405 });
+  }
+
+  const adminToken = Netlify.env.get('ADMIN_TOKEN');
+  if (!adminToken) {
+    return Response.json({ error: 'Channel imports are disabled.' }, { status: 503 });
+  }
+
+  const expected = Buffer.from('Bearer ' + adminToken);
+  const supplied = Buffer.from(req.headers.get('Authorization') ?? '');
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    return Response.json({ error: 'Invalid admin token.' }, { status: 401 });
   }
 
   const apiKey = Netlify.env.get('YOUTUBE_API_KEY');
@@ -13,10 +25,11 @@ export default async (req) => {
     );
   }
 
-  const { channelId } = await req.json();
-  if (!channelId) {
+  const body = await req.json().catch(() => null);
+  const channelId = body?.channelId;
+  if (typeof channelId !== 'string' || !/^UC[A-Za-z0-9_-]{22}$/.test(channelId)) {
     return Response.json(
-      { error: 'channelId is required in the request body.' },
+      { error: 'Enter a valid YouTube channel ID.' },
       { status: 400 }
     );
   }
@@ -28,6 +41,9 @@ export default async (req) => {
   channelUrl.searchParams.set('key', apiKey);
 
   const channelRes = await fetch(channelUrl);
+  if (!channelRes.ok) {
+    return Response.json({ error: 'YouTube could not look up the channel.' }, { status: 502 });
+  }
   const channelData = await channelRes.json();
 
   if (!channelData.items || channelData.items.length === 0) {
@@ -58,6 +74,9 @@ export default async (req) => {
     }
 
     const playlistRes = await fetch(playlistUrl);
+    if (!playlistRes.ok) {
+      return Response.json({ error: 'YouTube could not read the uploads playlist.' }, { status: 502 });
+    }
     const playlistData = await playlistRes.json();
 
     if (playlistData.items) {
@@ -71,7 +90,9 @@ export default async (req) => {
 
   // Store in Netlify Blobs
   const store = getStore('yt-videos');
-  await store.setJSON(channelTitle, {
+  const legacyChannel = await store.get(channelTitle, { type: 'json' });
+  const channelKey = legacyChannel?.channelId === channelId ? channelTitle : 'channel/' + channelId;
+  await store.setJSON(channelKey, {
     channelId,
     channelTitle,
     videoIds,

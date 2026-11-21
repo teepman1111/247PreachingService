@@ -107,9 +107,11 @@
     .admin-form {
       display: flex;
       gap: 0.75rem;
+      flex-wrap: wrap;
     }
 
     .admin-form input {
+      min-width: 0;
       flex: 1;
       padding: 0.65rem 1rem;
       font-size: 1rem;
@@ -135,53 +137,90 @@
 
   <main>
     <div class="video-container" id="video-container">
-      <!-- YouTube embed will be injected here -->
+      <div id="player"></div>
     </div>
 
     <div class="controls">
-      <button id="next-btn" onclick="loadRandomVideo()">Next Video</button>
+      <button id="next-btn" onclick="nextVideo()" disabled>Next Video</button>
     </div>
 
-    <p id="status">Loading a video...</p>
+    <p id="status" role="status">Loading a video...</p>
   </main>
 
   <div class="admin-section">
     <h2>Admin: Add a YouTube Channel</h2>
     <div class="admin-form">
-      <input type="text" id="channel-id" placeholder="YouTube Channel ID" />
+      <input type="text" id="channel-id" aria-label="YouTube channel ID" placeholder="YouTube channel ID" />
+      <input type="password" id="admin-token" aria-label="Admin token" placeholder="Admin token" />
       <button id="upload-btn" onclick="uploadChannel()">Upload Channel</button>
     </div>
-    <p id="admin-status"></p>
+    <p id="admin-status" role="status"></p>
   </div>
 
   <script>
+    const status = document.getElementById('status');
+    const nextButton = document.getElementById('next-btn');
+    const failedVideos = new Set();
+    let player;
+    let loading = false;
+    let currentVideo;
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        playerVars: { playsinline: 1, origin: window.location.origin },
+        events: {
+          onReady: () => loadRandomVideo(),
+          onStateChange: ({ data }) => {
+            if (data === YT.PlayerState.ENDED) loadRandomVideo();
+          },
+          onAutoplayBlocked: () => {
+            status.textContent = 'Press play to start watching.';
+          },
+          onError: () => {
+            if (!currentVideo) return;
+            failedVideos.add(currentVideo.videoId);
+            if (failedVideos.size >= 10) {
+              status.textContent = 'Several videos could not play. Select Next Video to retry.';
+              return;
+            }
+            loadRandomVideo();
+          },
+        },
+      });
+    }
+
+    function nextVideo() {
+      failedVideos.clear();
+      loadRandomVideo();
+    }
+
     async function loadRandomVideo() {
-      const status = document.getElementById('status');
-      const btn = document.getElementById('next-btn');
-      btn.disabled = true;
-      status.textContent = 'Loading...';
+      if (loading) return;
+      loading = true;
+      nextButton.disabled = true;
+      status.textContent = 'Loading a video…';
+
+      const query = new URLSearchParams();
+      if (currentVideo) query.set('previous', currentVideo.videoId);
+      for (const videoId of failedVideos) query.append('skip', videoId);
 
       try {
-        const res = await fetch('/api/random-video');
-        if (!res.ok) {
-          const err = await res.json();
-          status.textContent = err.error || 'Failed to load video.';
-          btn.disabled = false;
+        const response = await fetch('/api/random-video?' + query);
+        const data = await response.json();
+        if (!response.ok) {
+          status.textContent = data.error || 'Failed to load video.';
           return;
         }
 
-        const data = await res.json();
-        const container = document.getElementById('video-container');
-        container.innerHTML =
-          '<iframe src="https://www.youtube.com/embed/' +
-          data.videoId +
-          '?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
-        status.textContent = 'Playing from: ' + data.channel;
-      } catch (e) {
-        status.textContent = 'Error loading video. Please try again.';
+        currentVideo = data;
+        status.textContent = 'Selected from: ' + data.channel;
+        player.loadVideoById(data.videoId);
+      } catch {
+        status.textContent = 'Error loading video. Select Next Video to retry.';
+      } finally {
+        loading = false;
+        nextButton.disabled = false;
       }
-
-      btn.disabled = false;
     }
 
     async function uploadChannel() {
@@ -189,9 +228,10 @@
       const status = document.getElementById('admin-status');
       const btn = document.getElementById('upload-btn');
       const channelId = input.value.trim();
+      const token = document.getElementById('admin-token').value;
 
-      if (!channelId) {
-        status.textContent = 'Please enter a Channel ID.';
+      if (!channelId || !token) {
+        status.textContent = 'Enter a channel ID and admin token.';
         return;
       }
 
@@ -201,7 +241,10 @@
       try {
         const res = await fetch('/api/upload-channel', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token,
+          },
           body: JSON.stringify({ channelId }),
         });
 
@@ -219,9 +262,9 @@
       btn.disabled = false;
     }
 
-    // Load a random video on page load
-    loadRandomVideo();
   </script>
+  <script async src="https://www.youtube.com/iframe_api"
+    onerror="document.getElementById('status').textContent = 'Could not load the YouTube player. Refresh to retry.'"></script>
 
 </body>
 </html>

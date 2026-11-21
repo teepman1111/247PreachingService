@@ -6,13 +6,18 @@ Frontend: Static HTML/JS hosted on Netlify
 
 The intent of this project is to provide a space for Christians to come and watch Biblically accurate preaching 24/7. This project will not make any money and is not intended to make money until churches and their leadership sign off on allowing me to use their videos on this site.
 
-## Setup
+## Deploy on Netlify
 
-1. Set the `YOUTUBE_API_KEY` environment variable in your Netlify site settings (Site Settings > Environment Variables). You can get a YouTube Data API key from the [Google Cloud Console](https://console.cloud.google.com/).
+1. Connect this repository and select the branch containing the Netlify app. The publish and functions directories are configured in `netlify.toml`.
+2. Set `YOUTUBE_API_KEY` and a strong, unique `ADMIN_TOKEN` in the site's environment variables. Give both variables Functions scope if your plan supports scoping.
+3. Deploy the site. In **Admin: Add a YouTube Channel**, enter the channel's `UC…` ID and your admin token, then select **Upload Channel**. Repeat for each channel you choose. The importer fetches the channel's uploads playlist and stores its video IDs.
+4. Select **Next Video** or reload the page to start watching. Press play in the YouTube player if your browser blocks autoplay.
 
-2. Deploy to Netlify. The site will be available at your Netlify URL.
+## Playback
 
-3. Use the admin section on the page to add YouTube channels by their Channel ID.
+Each viewer gets a random video on arrival. The player picks another when a video ends or when the viewer selects **Next Video**. It avoids immediate repeats when another video is available and skips videos YouTube cannot play in the embed. Viewers run independent streams.
+
+YouTube controls ads and playback availability for embedded videos. Guaranteed ad-free playback requires a separate source of video files you have permission to host and stream.
 
 ## Architecture
 
@@ -25,6 +30,6 @@ Data is stored in Netlify Blobs (key-value store), replacing the previous Fireba
 ## Planned features
 
 - Server-side video streaming, making everyone be able to watch the same thing at the same time
-- Admin panel
+- Expanded admin panel for managing the catalog
 - Video transcript word-cloud for filtering videos
 - Business plan
