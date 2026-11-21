@@ -24,6 +24,20 @@
   body.signage { background: black; }
   body.signage main { max-width: none; padding: 0; }
   body.signage .screen { height: 100dvh; }
+  #exit-signage { display: none; }
+  body.signage #exit-signage {
+    display: inline-block;
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1;
+    padding: .65rem .9rem;
+    background: #14181b;
+    color: #f7f5ec;
+    border: 1px solid #87918a;
+    border-radius: .4rem;
+  }
+  #exit-signage:focus-visible { outline: 2px solid #b6da9b; outline-offset: 3px; }
   body.signage #play-status { position: fixed; inset: auto 1rem 1rem; text-align: center; pointer-events: none; }
 </style>
 <main>
@@ -43,6 +57,7 @@
     <p id="admin-status" role="status"></p>
     <ul id="videos"></ul>
   </section>
+  <a id="exit-signage" href="/watch">Exit signage</a>
   <section id="watch" hidden>
     <div class="screen"><div id="player"></div></div>
     <p id="play-status" role="status">Loading the approved loop…</p>
