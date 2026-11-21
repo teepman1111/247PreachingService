@@ -62,3 +62,16 @@ The active topic uses the current set of matching videos from trusted sources.
 After it expires, both players return to all approved videos. Source removal
 excludes its videos unless another trusted source also supplies them. Existing
 individually approved videos remain in the all-approved loop.
+
+### Sharing Watch
+
+Share the `/watch` URL for synchronized viewing without a sign-in. The
+broadcast follows the weekly topic or the all-approved loop. Its server clock
+chooses the current video and playback offset from the ordered playlist and
+YouTube durations. The player checks the clock periodically and rejoins the
+current position when possible. YouTube ads, buffering, and browser autoplay
+rules can temporarily affect timing.
+
+Sites access is public so Watch can be opened by anyone with the link. The
+Worker requires the signed-in site owner for Programming, Signage, and their
+APIs. The public broadcast endpoint exposes the current video and timing.

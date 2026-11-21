@@ -75,3 +75,18 @@ export async function loadSourcePage(apiKey, playlistId, cursor) {
     .map(item => [item.id, item.snippet.title]));
   return { ids: ids.filter(id => eligibleIds.has(id)), titles, cursor: page.nextPageToken ?? null };
 }
+
+export async function loadVideoDurations(apiKey, ids) {
+  const details = await youtube(apiKey, 'videos', { part: 'contentDetails,status', id: ids.join(',') });
+  if (!Array.isArray(details.items)) throw new Error('YouTube returned incomplete video durations.');
+  const durations = new Map();
+  for (const item of details.items) {
+    if (!item.status?.embeddable || !['public', 'unlisted'].includes(item.status.privacyStatus)) continue;
+    const time = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(item.contentDetails?.duration ?? '');
+    if (!time) continue;
+    const [, days = 0, hours = 0, minutes = 0, seconds = 0] = time;
+    const total = Number(days) * 86400 + Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+    if (total > 0 && Number.isSafeInteger(total)) durations.set(item.id, total);
+  }
+  return durations;
+}

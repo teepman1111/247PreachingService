@@ -68,6 +68,7 @@
     padding: .6rem .9rem;
   }
   .nav-links a:hover { background: #ebece1; color: var(--green-dark); }
+  .public-watch .nav-links a:not([href="/watch"]) { display: none; }
   .nav-links a[aria-current="page"] { background: #e4e9db; color: var(--green-dark); }
 
   .hero {
@@ -145,6 +146,8 @@
   .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
   #now-playing-topic { margin: 1rem 0 0; font: 1.8rem/1.1 var(--serif); }
   #play-status { color: var(--muted); }
+  #broadcast-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin-top: .8rem; }
+  #broadcast-controls p { margin: 0; color: var(--muted); }
   body.signage { background: #000; }
   body.signage main { width: 100%; padding: 0; }
   body.signage .hero { display: none; }
@@ -240,11 +243,16 @@
   <section id="watch" hidden>
     <div class="hero">
       <h1>Watch</h1>
-      <p>Preaching from your church’s approved sources.</p>
+      <p>Join the church broadcast at the point everyone else is watching.</p>
     </div>
     <p id="now-playing-topic" hidden></p>
     <div class="screen"><div id="player"></div></div>
     <p id="play-status" role="status">Loading the approved loop…</p>
+    <div id="broadcast-controls" hidden>
+      <button id="join-broadcast" hidden>Join live</button>
+      <button id="copy-watch" class="secondary">Copy Watch link</button>
+      <p id="share-status" role="status"></p>
+    </div>
   </section>
 </main>
 <script>
@@ -497,6 +505,8 @@
     if (signage) {
       document.body.classList.add('signage');
       element('navigation').hidden = true;
+    } else {
+      element('broadcast-controls').hidden = false;
     }
     const script = document.createElement('script');
     script.src = 'https://www.youtube.com/iframe_api';
@@ -537,20 +547,146 @@
     }
   }
 
+  const join = element('join-broadcast');
+  let onAir, loadedSlot, failedSlot, syncTimer, lastLoad = -Infinity;
+  let syncInFlight = false;
+  let autoplayBlocked = false;
+
+  function estimatedBroadcastTime() {
+    return onAir.serverNow + (performance.now() - onAir.receivedAt);
+  }
+
+  function playBroadcastSlot() {
+    const now = estimatedBroadcastTime();
+    if (now >= onAir.endsAt) {
+      refreshBroadcast();
+      return;
+    }
+    loadedSlot = onAir.key;
+    lastLoad = performance.now();
+    player.loadVideoById({
+      videoId: onAir.videoId,
+      startSeconds: Math.max(0, (now - onAir.startsAt) / 1000),
+    });
+  }
+
+  join.onclick = () => {
+    if (!onAir) return;
+    autoplayBlocked = false;
+    failedSlot = null;
+    join.hidden = true;
+    playBroadcastSlot();
+  };
+
+  element('copy-watch').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(location.origin + '/watch');
+      element('share-status').textContent = 'Watch link copied.';
+    } catch {
+      element('share-status').textContent = 'Copy the address from your browser to share Watch.';
+    }
+  };
+
+  async function refreshBroadcast() {
+    if (syncInFlight) return;
+    syncInFlight = true;
+    clearTimeout(syncTimer);
+    let delay = 10000;
+    try {
+      const sentAt = performance.now();
+      const response = await fetch('/api/broadcast', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not reach the broadcast.');
+      const slot = await response.json();
+      const receivedAt = performance.now();
+      const topic = element('now-playing-topic');
+      topic.hidden = !slot.topic;
+      topic.textContent = slot.topic ?? '';
+
+      if (slot.state !== 'live') {
+        if (loadedSlot) player.stopVideo();
+        onAir = loadedSlot = null;
+        join.hidden = true;
+        playStatus.textContent = slot.state === 'preparing' ? 'Preparing the broadcast…'
+          : slot.state === 'empty' ? 'No videos are scheduled right now.'
+          : 'The broadcast is temporarily unavailable.';
+        if (slot.state === 'preparing') delay = 2500;
+        return;
+      }
+      onAir = {
+        ...slot,
+        serverNow: slot.serverNow + (receivedAt - sentAt) / 2,
+        receivedAt,
+        key: slot.videoId + ':' + slot.startsAt,
+      };
+      const now = estimatedBroadcastTime();
+      delay = Math.max(350, Math.min(delay, slot.endsAt - now + 150));
+      if (now >= slot.endsAt) return;
+
+      if (autoplayBlocked) {
+        join.hidden = false;
+        playStatus.textContent = 'Select Join live to start watching.';
+      } else if (failedSlot !== onAir.key) {
+        if (onAir.key !== loadedSlot) {
+          join.hidden = true;
+          playStatus.textContent = '';
+          playBroadcastSlot();
+        } else if (performance.now() - lastLoad > 10000 &&
+                   player.getPlayerState() === YT.PlayerState.PLAYING &&
+                   player.getVideoData()?.video_id === slot.videoId) {
+          const target = (now - slot.startsAt) / 1000;
+          if (Math.abs(player.getCurrentTime() - target) > 4) player.seekTo(target, true);
+        }
+      }
+    } catch (error) {
+      playStatus.textContent = error.message + ' Retrying shortly.';
+    } finally {
+      syncInFlight = false;
+      syncTimer = setTimeout(refreshBroadcast, delay);
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!signage && location.pathname === '/watch' && player && !document.hidden) refreshBroadcast();
+  });
+
   window.onYouTubeIframeAPIReady = () => {
     player = new YT.Player('player', {
       playerVars: { playsinline: 1, origin: location.origin },
       events: {
-        onReady: () => { if (signage) player.mute(); advance(); },
+        onReady: () => {
+          if (signage) {
+            player.mute();
+            advance();
+          } else {
+            refreshBroadcast();
+          }
+        },
         onStateChange: ({ data }) => {
           if (data === YT.PlayerState.PLAYING) {
             failed.clear();
+            join.hidden = true;
             playStatus.textContent = '';
           }
-          if (data === YT.PlayerState.ENDED) advance();
+          if (data === YT.PlayerState.ENDED) (signage ? advance : refreshBroadcast)();
         },
-        onAutoplayBlocked: () => { playStatus.textContent = 'Press play to start the loop.'; },
-        onError: () => { if (current) failed.add(current); advance(); },
+        onAutoplayBlocked: () => {
+          if (signage) {
+            playStatus.textContent = 'Press play to start the loop.';
+          } else {
+            autoplayBlocked = true;
+            join.hidden = !onAir;
+            playStatus.textContent = 'Select Join live to start watching.';
+          }
+        },
+        onError: () => {
+          if (signage) {
+            if (current) failed.add(current);
+            advance();
+          } else {
+            failedSlot = loadedSlot;
+            playStatus.textContent = 'This video could not play. The broadcast will resume with the next video.';
+          }
+        },
       },
     });
   };
