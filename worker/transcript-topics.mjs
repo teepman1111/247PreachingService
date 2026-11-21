@@ -34,7 +34,13 @@ export async function classifyTranscript(apiKey, transcript) {
       } },
     }),
   });
-  if (!response.ok) throw new Error('AI topic analysis failed. Check the OpenAI API key and usage limits, then try again.');
+  if (!response.ok) {
+    const error = (await response.json().catch(() => ({}))).error;
+    if (error?.type === 'insufficient_quota' || error?.code === 'credit_balance_exhausted') {
+      throw new Error('AI topic analysis is paused because the OpenAI project has no API credits.');
+    }
+    throw new Error('AI topic analysis failed. Check the OpenAI API key and usage limits, then try again.');
+  }
   const result = await response.json();
   const output = result.output?.flatMap(item => item.content ?? []).find(item => item.type === 'output_text');
   if (result.status !== 'completed' || !output) throw new Error('AI topic analysis returned no complete result. Try again.');

@@ -69,22 +69,19 @@
         <button type="button" id="sync-all" class="secondary" hidden>Sync all sources</button>
       </section>
       <section class="program-section">
-        <h3>Transcript coverage</h3>
+        <h3>Automatic topic indexing</h3>
         <p id="coverage"></p>
-        <form id="transcripts">
-          <label for="transcript-files">Upload transcripts named by video ID</label>
-          <input type="file" id="transcript-files" accept=".txt,.vtt,.srt" multiple required aria-describedby="transcript-help">
-          <button>Analyze transcripts</button>
-        </form>
-        <p id="transcript-help" class="supporting">Use the 11-character YouTube video ID as the filename, for example <code>dQw4w9WgXcQ.txt</code>. Upload transcripts you have permission to use.</p>
-        <p id="ai-setup" class="supporting" hidden>Set OPENAI_API_KEY in Sites production secrets to analyze transcripts.</p>
-        <ul id="transcript-results" aria-label="Transcript results"></ul>
+        <p id="caption-setup" class="supporting" hidden>Connect a YouTube account with permission to download captions for your trusted videos.</p>
+        <p id="ai-setup" class="supporting" hidden>Set OPENAI_API_KEY in Sites production secrets to index topics.</p>
+        <p id="index-status" role="status"></p>
+        <button type="button" id="resume-index" class="secondary" hidden>Resume indexing</button>
+        <button type="button" id="retry-captions" class="secondary" hidden>Recheck caption access</button>
       </section>
       <section class="program-section">
         <h3>Topic cloud</h3>
         <p id="weekly-program"></p>
         <div id="topics" class="topic-cloud" aria-label="Topics by number of matching videos"></div>
-        <p id="topic-empty" class="supporting" hidden>Analyze transcripts from your trusted sources to build the topic cloud.</p>
+        <p id="topic-empty" class="supporting" hidden>Topics will appear as captions from your trusted sources are indexed.</p>
         <form id="publish-topic" hidden>
           <p id="topic-preview"></p>
           <button>Use this topic for the week</button>
@@ -158,6 +155,8 @@
   const programStatus = element('program-status');
   let selectedTopic = null;
   let working = false;
+  let indexing = false;
+  let canIndex = false;
 
   async function programApi(action, data) {
     const response = await fetch('/api/program/' + action, data ? {
@@ -186,6 +185,7 @@
       programStatus.textContent = 'Syncing ' + source.title + '…';
       result = await programApi('sync-source', { key: source.key });
     } while (result.more);
+    startIndexing();
     return result.total;
   }
 
@@ -195,10 +195,15 @@
     element('program').hidden = false;
     element('source-setup').hidden = data.youtubeConfigured;
     element('ai-setup').hidden = data.aiConfigured;
-    element('add-source').querySelector('button').disabled = !data.youtubeConfigured;
-    element('transcripts').querySelector('button').disabled = !data.aiConfigured;
+    element('caption-setup').hidden = data.captionsConfigured;
+    canIndex = data.aiConfigured && data.captionsConfigured;
+    const waiting = data.total - data.analyzed - data.unavailable;
+    element('resume-index').hidden = !canIndex || waiting === 0;
+    element('resume-index').disabled = indexing;
+    element('retry-captions').hidden = !canIndex || data.unavailable === 0;
+    element('retry-captions').disabled = indexing;
     element('coverage').textContent = data.analyzed + ' of ' + data.total +
-      ' unique videos analyzed · ' + (data.total - data.analyzed) + ' awaiting transcripts';
+      ' unique videos indexed · ' + waiting + ' queued · ' + data.unavailable + ' without usable captions';
     const list = element('sources');
     list.replaceChildren();
     for (const source of data.sources) {
@@ -288,6 +293,10 @@
       message = error.message;
     }
     controls.forEach(button => { button.disabled = false; });
+    if (indexing) {
+      element('resume-index').disabled = true;
+      element('retry-captions').disabled = true;
+    }
     try {
       await renderProgram();
     } catch (error) {
@@ -312,32 +321,42 @@
     });
   };
 
-  element('transcripts').onsubmit = event => {
-    event.preventDefault();
-    runProgramAction(async () => {
-      const files = [...element('transcript-files').files];
-      const results = element('transcript-results');
-      results.replaceChildren();
-      let analyzed = 0;
-      for (const [index, file] of files.entries()) {
-        programStatus.textContent = 'Analyzing transcript ' + (index + 1) + ' of ' + files.length + '…';
-        const item = document.createElement('li');
-        try {
-          const name = file.name.match(/^([A-Za-z0-9_-]{11})\.(txt|vtt|srt)$/i);
-          if (!name) throw new Error('Name the transcript file with its 11-character video ID.');
-          if (file.size > 1400000) throw new Error('Transcript file is too large.');
-          const result = await programApi('analyze', { videoId: name[1], transcript: await file.text() });
-          item.textContent = file.name + ' · ' + (result.tags.join(', ') || 'No matching topic');
-          analyzed++;
-        } catch (error) {
-          item.textContent = file.name + ' · ' + error.message;
-        }
-        results.append(item);
+  async function startIndexing(retryUnavailable = false) {
+    if (!canIndex || indexing) return;
+    indexing = true;
+    element('resume-index').disabled = true;
+    element('retry-captions').disabled = true;
+    const status = element('index-status');
+    let indexed = 0;
+    let unavailable = 0;
+    try {
+      for (;;) {
+        status.textContent = 'Indexing captions… ' + indexed + ' indexed, ' + unavailable + ' unavailable.';
+        const result = await programApi('index-next', { retryUnavailable });
+        retryUnavailable = false;
+        if (result.outcome === 'done') break;
+        if (result.outcome === 'indexed') indexed++;
+        if (result.outcome === 'unavailable') unavailable++;
+        if (!working && indexed && indexed % 5 === 0 && result.outcome === 'indexed') await renderProgram();
       }
-      element('transcript-files').value = '';
-      return 'Indexed ' + analyzed + ' of ' + files.length + ' transcripts.';
-    });
-  };
+      status.textContent = indexed || unavailable
+        ? 'Indexing complete. ' + indexed + ' added, ' + unavailable + ' without usable captions.'
+        : '';
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      indexing = false;
+      if (!working) {
+        try {
+          await renderProgram();
+        } catch (error) {
+          status.textContent ||= error.message;
+        }
+      }
+    }
+  }
+  element('resume-index').onclick = () => startIndexing();
+  element('retry-captions').onclick = () => startIndexing(true);
 
   element('publish-topic').onsubmit = event => {
     event.preventDefault();
@@ -370,7 +389,7 @@
         button.disabled = false;
       }
     };
-    renderProgram().catch(error => { programStatus.textContent = error.message; });
+    renderProgram().then(() => { startIndexing(); }).catch(error => { programStatus.textContent = error.message; });
     renderVideos().catch(error => { element('admin-status').textContent = error.message; });
   } else {
     element('watch').hidden = false;

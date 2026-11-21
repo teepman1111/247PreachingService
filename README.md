@@ -52,12 +52,21 @@ all sources** to pick up new uploads or reflect videos removed from a source.
 The previous completed catalog stays active if a sync is interrupted. Resume
 the sync or discard the partial result from the source row.
 
-Upload authorized TXT, VTT, or SRT transcript files named with their YouTube
-video IDs (for example, `dQw4w9WgXcQ.txt`). The same video counts once even if it
-appears in multiple sources. The app sends transcript text to OpenAI for topic
-classification and persists the resulting topic tags and transcript hash.
-YouTube source sync does not retrieve captions. Videos without transcripts are
-available in the all-approved loop and do not count toward transcript topics.
+For automatic caption access, configure `YOUTUBE_OAUTH_CLIENT_ID`,
+`YOUTUBE_OAUTH_CLIENT_SECRET`, and `YOUTUBE_OAUTH_REFRESH_TOKEN` as Sites
+production secrets. Obtain the refresh token through Google OAuth using the
+`https://www.googleapis.com/auth/youtube.force-ssl` scope, offline access, and
+an account authorized to edit the videos. YouTube's official API only allows
+caption downloads for videos the connected account can edit. Approving a public
+channel or playlist does not grant that access.
+
+Programming automatically checks unindexed videos when it opens or when a
+source finishes syncing. Keep Programming open while indexing runs. The
+app downloads accessible caption tracks, sends their text to OpenAI for topic
+classification, and retains only topic tags and a transcript hash. Videos
+without accessible captions remain eligible for the all-approved loop.
+Use **Recheck caption access** after obtaining new permissions. Indexing is
+deduplicated by video ID and pauses on provider or quota errors.
 
 Select a topic in the cloud and publish it to Watch and Signage for seven days.
 The active topic uses the current set of matching videos from trusted sources.

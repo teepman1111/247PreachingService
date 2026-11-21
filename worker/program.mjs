@@ -1,9 +1,11 @@
-import { loadSourcePage, parseSource, resolveSource, videoIdPattern } from './youtube-sources.mjs';
+import { loadSourcePage, parseSource, resolveSource } from './youtube-sources.mjs';
+import { captionsConfigured, readYouTubeTranscript } from './youtube-captions.mjs';
 import { classifyTranscript, topics, transcriptHash } from './transcript-topics.mjs';
 
 const programKey = 'program/catalog.json';
 const week = 7 * 24 * 60 * 60 * 1000;
 const maxTranscript = 350000;
+const captionLeaseTime = 3 * 60 * 1000;
 
 class ProgramError extends Error {
   constructor(message, status) {
@@ -44,6 +46,10 @@ function analysisFor(program, id) {
   return Object.hasOwn(program.analyses, id) ? program.analyses[id] : undefined;
 }
 
+function captionCheckFor(program, id) {
+  return program.captionChecks && Object.hasOwn(program.captionChecks, id) ? program.captionChecks[id] : undefined;
+}
+
 function currentSelection(program) {
   return program.selection && Date.parse(program.selection.endsAt) > Date.now() ? program.selection : null;
 }
@@ -52,9 +58,13 @@ function describeProgram(program, env) {
   const ids = catalogIds(program);
   const counts = new Map();
   let analyzed = 0;
+  let unavailable = 0;
   for (const id of ids) {
     const analysis = analysisFor(program, id);
-    if (!analysis) continue;
+    if (!analysis) {
+      if (captionCheckFor(program, id)?.retryAt > Date.now()) unavailable++;
+      continue;
+    }
     analyzed++;
     for (const topic of analysis.tags) counts.set(topic, (counts.get(topic) ?? 0) + 1);
   }
@@ -66,6 +76,8 @@ function describeProgram(program, env) {
     })),
     total: ids.size,
     analyzed,
+    unavailable,
+    captionsConfigured: captionsConfigured(env),
     topics: [...counts].map(([name, count]) => ({ name, count }))
       .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name)),
     selection: currentSelection(program),
@@ -110,30 +122,54 @@ async function syncSource(env, key) {
   });
 }
 
-async function analyzeVideo(env, bucket, body) {
-  const id = typeof body.videoId === 'string' ? body.videoId.trim() : '';
-  if (!videoIdPattern.test(id)) throw new ProgramError('Enter a YouTube video ID.', 400);
-  const transcript = typeof body.transcript === 'string' ? body.transcript.trim() : '';
-  if (!transcript || transcript.length > maxTranscript) {
-    throw new ProgramError('Provide a transcript between 1 and 350,000 characters.', 400);
-  }
+async function indexNextCaption(env, retryUnavailable) {
+  const bucket = env.BUCKET;
   const { program } = await readProgram(bucket);
-  if (!catalogIds(program).has(id)) throw new ProgramError('Sync a trusted source that contains this video first.', 404);
-  const hash = await transcriptHash(transcript);
-  if (Object.hasOwn(program.analyses, id) && program.analyses[id].hash === hash) {
-    return { tags: program.analyses[id].tags, cached: true };
-  }
-  const previousHash = analysisFor(program, id)?.hash;
-  const tags = await classifyTranscript(env.OPENAI_API_KEY, transcript);
-  return changeProgram(bucket, latest => {
-    if (!catalogIds(latest).has(id)) throw new ProgramError('The video is no longer from an approved source.', 409);
-    if (analysisFor(latest, id)?.hash === hash) return { tags: latest.analyses[id].tags, cached: true };
-    if (analysisFor(latest, id)?.hash !== previousHash) {
-      throw new ProgramError('Another transcript was indexed for this video. Try again if you want to replace it.', 409);
+  const nextId = current => [...catalogIds(current)].find(id =>
+    !analysisFor(current, id) && !(captionCheckFor(current, id)?.retryAt > Date.now()));
+  if (!retryUnavailable && !nextId(program)) return { outcome: 'done' };
+
+  const claim = crypto.randomUUID();
+  const id = await changeProgram(bucket, latest => {
+    const now = Date.now();
+    if (latest.captionLease?.expiresAt > now) {
+      throw new ProgramError('Caption indexing is already running. Try again in a moment.', 409);
     }
-    latest.analyses[id] = { hash, tags };
-    return { tags, cached: false };
+    if (retryUnavailable) latest.captionChecks = {};
+    const pendingId = nextId(latest);
+    if (pendingId) latest.captionLease = { claim, expiresAt: now + captionLeaseTime };
+    return pendingId;
   });
+  if (!id) return { outcome: 'done' };
+
+  try {
+    const result = await readYouTubeTranscript(env, id);
+    const transcript = result.transcript;
+    const analysis = transcript && transcript.length <= maxTranscript ? {
+      hash: await transcriptHash(transcript),
+      tags: await classifyTranscript(env.OPENAI_API_KEY, transcript),
+    } : null;
+    return await changeProgram(bucket, latest => {
+      if (latest.captionLease?.claim !== claim) {
+        throw new ProgramError('Caption indexing moved to another request. Resume indexing to continue.', 409);
+      }
+      delete latest.captionLease;
+      if (!catalogIds(latest).has(id) || analysisFor(latest, id)) return { outcome: 'skipped' };
+      if (analysis) {
+        latest.analyses[id] = analysis;
+        return { outcome: 'indexed' };
+      }
+      latest.captionChecks ??= {};
+      latest.captionChecks[id] = { reason: result.reason ?? 'too-long', retryAt: Date.now() + week };
+      return { outcome: 'unavailable' };
+    });
+  } catch (error) {
+    // A failed provider call leaves the video queued for retry. The lease also expires if the request is interrupted.
+    await changeProgram(bucket, latest => {
+      if (latest.captionLease?.claim === claim) delete latest.captionLease;
+    }).catch(() => {});
+    throw error;
+  }
 }
 
 export async function readPlaybackProgram(bucket) {
@@ -159,9 +195,7 @@ export async function programRequest(request, env, action) {
       request.headers.get('Content-Type')?.split(';')[0] !== 'application/json') {
     return respond({ error: 'Submit changes from the church admin page.' }, 403);
   }
-  if (Number(request.headers.get('Content-Length')) > 2200000) {
-    return respond({ error: 'The transcript upload is too large.' }, 413);
-  }
+  if (Number(request.headers.get('Content-Length')) > 65536) return respond({ error: 'Request is too large.' }, 413);
 
   let body;
   try {
@@ -191,9 +225,10 @@ export async function programRequest(request, env, action) {
           }
           return { ok: true };
         }));
-      case 'analyze':
-        if (!env.OPENAI_API_KEY) throw new ProgramError('Configure OPENAI_API_KEY in Sites to analyze transcripts.', 503);
-        return respond(await analyzeVideo(env, env.BUCKET, body));
+      case 'index-next':
+        if (!env.OPENAI_API_KEY) throw new ProgramError('Configure OPENAI_API_KEY in Sites to index topics.', 503);
+        if (!captionsConfigured(env)) throw new ProgramError('Connect a YouTube account with caption access to index topics.', 503);
+        return respond(await indexNextCaption(env, body.retryUnavailable === true));
       case 'publish':
         return respond(await changeProgram(env.BUCKET, program => {
           if (body.topic === null) {
