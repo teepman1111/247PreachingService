@@ -33,3 +33,7 @@ Data is stored in Netlify Blobs (key-value store), replacing the previous Fireba
 - Expanded admin panel for managing the catalog
 - Video transcript word-cloud for filtering videos
 - Business plan
+
+## ChatGPT Sites hosting
+
+Build the Worker with `bash scripts/build-sites.sh`. The Site uses its own R2 catalog, so add your channels again if they were originally imported on Netlify. Set `ADMIN_TOKEN` and `YOUTUBE_API_KEY` as production secrets in Sites and redeploy to apply them. Then enter the same admin token in the site's import form.
