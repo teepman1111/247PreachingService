@@ -213,7 +213,8 @@
       <span class="brand-name">24/7 Preaching</span>
     </a>
     <nav class="nav-links" aria-label="Main navigation">
-      <a href="/">Programming</a>
+      <a href="/">Pastor dashboard</a>
+      <a href="/programming">Programming</a>
       <a href="/watch">Watch</a>
       <a href="/signage">Signage</a>
     </nav>
@@ -286,6 +287,7 @@
           <input id="source" required maxlength="512" placeholder="Channel link, @handle, or playlist link">
           <button>Approve source</button>
         </form>
+        <p id="source-limits" class="supporting" hidden>Import up to 10 sources and 200 eligible videos per source. Use a curated playlist to control what goes on air.</p>
         <p id="source-setup" class="supporting" hidden>Set YOUTUBE_API_KEY in Sites production secrets to import sources.</p>
         <ul id="sources"></ul>
         <button type="button" id="sync-all" class="secondary" hidden>Sync all sources</button>
@@ -348,7 +350,10 @@
   </section>
 </main>
 <script>
-  const endpoint = '/api/approved-videos';
+  const { channelBase: channelBase = '', mode } = document.querySelector('main').dataset;
+  const watchPath = channelBase + '/watch';
+  const previousTuneInKey = 'church-channel-last-tune-in' + (channelBase ? ':' + channelBase : '');
+  const endpoint = channelBase + '/api/approved-videos';
   const element = id => document.getElementById(id);
   async function readVideos() {
     const response = await fetch(endpoint, { cache: 'no-store' });
@@ -399,7 +404,7 @@
   let working = false;
 
   async function programApi(action, data) {
-    const response = await fetch('/api/program/' + action, data ? {
+    const response = await fetch(channelBase + '/api/program/' + action, data ? {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -467,13 +472,15 @@
     excludedVideos = data.excluded;
     if (!channelDirty) {
       channelRevision = data.channelRevision;
+      document.querySelector('.brand-name').textContent = data.channel.name;
+      document.title = data.channel.name + ' · Programming';
       for (const name of ['name', 'timeZone', 'prayerUrl']) channelForm.elements[name].value = data.channel[name];
       airingsList.replaceChildren();
       data.channel.slots.forEach(addAiring);
       element('add-airing').disabled = airingsList.children.length >= 28;
       element('preview-watch').textContent = 'Preview ' + data.channel.name;
       element('bulletin-copy').textContent = 'Tune in to ' + data.channel.name +
-        ' throughout the week. See what’s playing and what’s coming up at ' + location.origin + '/watch.';
+        ' throughout the week. See what’s playing and what’s coming up at ' + location.origin + watchPath + '.';
     } else {
       airingsList.querySelectorAll('select[name="videoId"]').forEach(select => fillVideoOptions(select, select.value));
     }
@@ -539,7 +546,7 @@
     const button = element('refresh-pilot');
     button.disabled = true;
     try {
-      const response = await fetch('/api/pilot/report', { cache: 'no-store' });
+      const response = await fetch(channelBase + '/api/pilot/report', { cache: 'no-store' });
       if (!response.ok) throw new Error('Could not load activity.');
       const { days } = await response.json();
       const sum = field => days.reduce((total, day) => total + day[field], 0);
@@ -575,6 +582,7 @@
     if (!data) return;
     element('program').hidden = false;
     element('source-setup').hidden = data.youtubeConfigured;
+    element('source-limits').hidden = !channelBase;
     const titlePending = data.total - data.titlesAvailable;
     element('coverage').textContent = data.matched + ' of ' + data.total +
       ' unique videos matched by title' + (titlePending ? ' · ' + titlePending + ' awaiting titles' : '');
@@ -706,11 +714,11 @@
     return 'Watch and Signage are using all approved videos.';
   });
 
-  const signage = location.pathname === '/signage';
+  const signage = mode === 'signage';
   for (const link of document.querySelectorAll('.nav-links a')) {
     if (link.pathname === location.pathname) link.setAttribute('aria-current', 'page');
   }
-  if (location.pathname === '/') {
+  if (mode === 'programming') {
     element('admin').hidden = false;
     const form = element('approve');
     form.onsubmit = async event => {
@@ -760,7 +768,7 @@
     if (loading) return;
     loading = true;
     try {
-      const response = await fetch('/api/playback', { cache: 'no-store' });
+      const response = await fetch(channelBase + '/api/playback', { cache: 'no-store' });
       if (!response.ok) throw new Error('Could not load the approved loop.');
       const { videoIds: ids, selection } = await response.json();
       const topic = element('now-playing-topic');
@@ -785,7 +793,7 @@
     }
   }
 
-  const isWatch = location.pathname === '/watch';
+  const isWatch = mode === 'watch';
   let watchReady = false;
   let youtubeUnavailable = false;
   let fallbackVideo;
@@ -794,7 +802,7 @@
   let reportedFailure = false;
 
   function recordPilotEvent(event) {
-    fetch('/api/pilot/event?event=' + event, { method: 'POST', keepalive: true }).catch(() => {});
+    fetch(channelBase + '/api/pilot/event?event=' + event, { method: 'POST', keepalive: true }).catch(() => {});
   }
 
   function recordTuneIn() {
@@ -802,9 +810,9 @@
     tuneInRecorded = true;
     let returning = false;
     try {
-      const last = Number(localStorage.getItem('church-channel-last-tune-in'));
+      const last = Number(localStorage.getItem(previousTuneInKey));
       returning = last > 0 && Date.now() - last >= 30 * 60000;
-      localStorage.setItem('church-channel-last-tune-in', Date.now());
+      localStorage.setItem(previousTuneInKey, Date.now());
     } catch {}
     recordPilotEvent(returning ? 'returningTuneIns' : 'tuneIns');
   }
@@ -911,7 +919,7 @@
 
   element('copy-watch').onclick = async () => {
     try {
-      await navigator.clipboard.writeText(location.origin + '/watch');
+      await navigator.clipboard.writeText(location.origin + watchPath);
       element('share-status').textContent = 'Watch link copied.';
     } catch {
       element('share-status').textContent = 'Copy the address from your browser to share Watch.';
@@ -926,7 +934,7 @@
     let playAlternateAfterRefresh = false;
     try {
       const sentAt = performance.now();
-      const response = await fetch('/api/broadcast', { cache: 'no-store' });
+      const response = await fetch(channelBase + '/api/broadcast', { cache: 'no-store' });
       if (!response.ok) throw new Error('Could not reach the broadcast.');
       const slot = await response.json();
       const receivedAt = performance.now();

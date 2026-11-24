@@ -21,7 +21,7 @@ async function readProgram(bucket) {
   const object = await bucket.get(programKey);
   return object
     ? { program: await object.json(), etag: object.etag }
-    : { program: { sources: [], selection: null }, etag: null };
+    : { program: { sources: [], selection: null, channel: bucket.channelDefaults ?? defaultChannel }, etag: null };
 }
 
 async function changeProgram(bucket, change) {
@@ -92,6 +92,9 @@ async function addSource(env, input) {
   if (!source) throw new ProgramError('YouTube could not find that channel or playlist.', 404);
   return changeProgram(env.BUCKET, program => {
     if (!program.sources.some(item => item.key === source.key)) {
+      if (env.BUCKET.channelDefaults && program.sources.length >= 10) {
+        throw new ProgramError('This channel can have up to 10 approved YouTube sources.', 409);
+      }
       program.sources.push({ ...source, videoIds: [], syncedAt: null, pending: null, revision: crypto.randomUUID() });
     }
     return { key: source.key };
@@ -113,15 +116,16 @@ async function syncSource(env, key) {
     const videoIds = [...new Set([...(pending?.videoIds ?? []), ...page.ids])];
     const titles = { ...pending?.titles, ...page.titles };
     current.revision = crypto.randomUUID();
-    if (page.cursor) {
+    const sourceLimit = env.BUCKET.channelDefaults ? 200 : Infinity;
+    if (page.cursor && videoIds.length < sourceLimit) {
       current.pending = { cursor: page.cursor, videoIds, titles };
     } else {
       current.pending = null;
-      current.videoIds = videoIds;
-      current.titles = titles;
+      current.videoIds = videoIds.slice(0, sourceLimit);
+      current.titles = Object.fromEntries(current.videoIds.map(id => [id, titles[id]]));
       current.syncedAt = new Date().toISOString();
     }
-    return { more: Boolean(page.cursor), total: videoIds.length };
+    return { more: Boolean(current.pending), total: Math.min(videoIds.length, sourceLimit) };
   });
 }
 
@@ -146,10 +150,6 @@ export async function readPlaybackProgram(bucket) {
 }
 
 export async function programRequest(request, env, action) {
-  const email = request.headers.get('oai-authenticated-user-email');
-  if (!env.SITE_ADMIN_EMAIL || email?.toLowerCase() !== env.SITE_ADMIN_EMAIL.toLowerCase()) {
-    return respond({ error: 'Church admin access is required.' }, 403);
-  }
   if (action === 'summary' && request.method === 'GET') {
     const { program } = await readProgram(env.BUCKET);
     const videos = catalog(program);

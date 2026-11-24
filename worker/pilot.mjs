@@ -10,9 +10,9 @@ function escapeHtml(value) {
   })[character]);
 }
 
-export async function invitation(request, env) {
+export async function invitation(request, env, base) {
   const channel = await readChannel(env.BUCKET);
-  const watch = new URL('/watch', request.url).href;
+  const watch = new URL(base + '/watch', request.url).href;
   const code = qrcode(0, 'M');
   code.addData(watch);
   code.make();

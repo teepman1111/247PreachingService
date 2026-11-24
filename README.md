@@ -99,7 +99,25 @@ program takes to prepare. The report counts playback starts per page session,
 returning tune-ins estimated from browser storage, and player errors. The
 counts are estimates and contain no stored viewer identities.
 
-Each pilot church needs its own deployment, storage binding, approved catalog,
-and `SITE_ADMIN_EMAIL`. YouTube embeds still depend on YouTube availability,
+Each church approves its own catalog. YouTube embeds still depend on YouTube availability,
 advertising, and browser playback rules. The public player tries approved
 backup sermons on a playback error and rejoins the guide at the next slot.
+
+### Shared pastor dashboard
+
+The hosted Sites app supports multiple churches on one deployment. Open the
+home page and sign in with ChatGPT. Create a channel with the church name and
+time zone, then manage it from the dashboard. Each signed-in account can
+create one channel. The channel's share link stays the same when the display
+name changes.
+
+Pastors use their own Programming page. Watch is public and works without
+sign-in. Each channel has its own approved videos, sources, programming,
+broadcast metadata, and pilot activity. New channels support up to 10 imported
+sources, 200 eligible videos per source, and 200 individually approved videos.
+The deployment shares a YouTube API key across churches and serves the videos
+via YouTube embeds.
+
+The original pilot keeps its existing `/watch` link and its own storage.
+Its administrator can reach it from the shared dashboard or at `/programming`.
+The `SITE_ADMIN_EMAIL` secret continues to apply to the original pilot.

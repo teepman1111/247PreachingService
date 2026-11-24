@@ -47,10 +47,6 @@ export async function approvedVideos(request, env) {
   if (!['POST', 'DELETE'].includes(request.method)) {
     return respond({ error: 'Method not allowed.' }, 405);
   }
-  const email = request.headers.get('oai-authenticated-user-email');
-  if (!env.SITE_ADMIN_EMAIL || email?.toLowerCase() !== env.SITE_ADMIN_EMAIL.toLowerCase()) {
-    return respond({ error: 'Church admin access is required.' }, 403);
-  }
   if (request.headers.get('Origin') !== new URL(request.url).origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) {
     return respond({ error: 'Submit changes from the church admin page.' }, 403);
@@ -63,6 +59,11 @@ export async function approvedVideos(request, env) {
   if (request.method === 'DELETE') {
     await env.BUCKET.delete(key);
   } else {
+    if (env.BUCKET.channelDefaults) {
+      const videos = await individuallyApprovedIds(env.BUCKET);
+      if (videos.includes(id)) return respond({ id });
+      if (videos.length >= 200) return respond({ error: 'This channel can have up to 200 individually approved videos.' }, 409);
+    }
     await env.BUCKET.put(key, 'approved', { onlyIf: { etagDoesNotMatch: '*' } });
   }
   return respond({ id });

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pastor dashboard · 24/7 Preaching</title>
+<style>
+  :root { color-scheme: light; --green: #17382b; --ink: #1d3026; --paper: #f7f4eb; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 1rem/1.55 system-ui, sans-serif; }
+  header, main { width: min(70rem, 100% - 2rem); margin-inline: auto; }
+  header { min-height: 5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  header a { text-decoration: none; }
+  header strong { font: 1.4rem/1.15 Georgia, serif; }
+  main { padding-bottom: 3rem; }
+  .hero { padding: clamp(2rem, 7vw, 5.5rem); border-radius: 1.2rem; color: #fffaf0;
+    background: linear-gradient(90deg, #132e23 10%, #132e23df 55%, #132e2355), #17382b url('/assets/sanctuary.webp') center / cover; }
+  h1, h2 { font-family: Georgia, serif; font-weight: 400; line-height: 1.1; margin: 0; overflow-wrap: anywhere; }
+  h1 { font-size: clamp(2.5rem, 7vw, 5.25rem); max-width: 15ch; }
+  h2 { font-size: 1.9rem; }
+  .hero p { max-width: 34rem; margin: 1rem 0 0; }
+  section.card { max-width: 42rem; margin-top: 1.25rem; padding: clamp(1.25rem, 4vw, 2rem); background: #fffdf7;
+    border: 1px solid #dce0d3; border-radius: 1rem; }
+  a { color: inherit; text-underline-offset: .18em; }
+  .button, button { display: inline-flex; min-height: 2.9rem; align-items: center; background: var(--green); color: #fffaf0;
+    border: 1px solid transparent; padding: .65rem 1rem; border-radius: .55rem; font: inherit; font-weight: 650; text-decoration: none; cursor: pointer; }
+  .hero .button { margin-top: 1.5rem; background: #f3e1aa; color: #172c22; }
+  button:disabled { opacity: .6; cursor: default; }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin-top: 1.2rem; }
+  label { display: grid; gap: .3rem; font-weight: 600; }
+  form { display: grid; gap: 1rem; margin-top: 1rem; }
+  input { width: 100%; padding: .65rem; font: inherit; color: inherit; background: #fffdf7; border: 1px solid #9fa99b; border-radius: .45rem; }
+  small { font-size: .875rem; font-weight: 400; }
+  #setup-status:empty { display: none; }
+  :focus-visible { outline: 2px solid #818b57; outline-offset: 3px; }
+</style>
+<header><strong>24/7 Preaching</strong><!-- account-nav --></header>
+<main>
+  <section class="hero">
+    <h1>Your church between Sundays</h1>
+    <p>Give your congregation one place to tune in all week. Turn sermons you already record into your church’s own 24/7 channel.</p>
+    <!-- hero-action -->
+  </section>
+  <!-- dashboard -->
+</main>
+<script>
+  const setup = document.getElementById('setup');
+  if (setup) {
+    try {
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (zone) setup.elements.timeZone.value = zone;
+    } catch {}
+    setup.onsubmit = async event => {
+      event.preventDefault();
+      const button = event.submitter;
+      const status = document.getElementById('setup-status');
+      button.disabled = true;
+      status.textContent = 'Creating your channel…';
+      try {
+        const response = await fetch('/api/channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.fromEntries(new FormData(setup))),
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Could not create your channel.');
+        location.assign(body.programming);
+      } catch (error) {
+        status.textContent = error.message;
+        button.disabled = false;
+      }
+    };
+  }
+</script>
+</html>
