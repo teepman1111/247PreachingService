@@ -125,3 +125,8 @@ dmypy.json
 
 #private key
 preaching247-b6740-firebase-adminsdk-r3i95-7109d7389b.json
+
+# Node
+node_modules/
+
+/dist/

@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>24/7 Preaching</title>
+<meta name="theme-color" content="#f7f4eb">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #f7f4eb;
+    --card: #fffdf7;
+    --ink: #202e26;
+    --muted: #59635a;
+    --green: #264535;
+    --green-dark: #172c22;
+    --line: #dcded0;
+    --gold: #efdba2;
+    --serif: "Instrument Serif", Georgia, serif;
+    --sans: "DM Sans", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 1rem/1.5 var(--sans); }
+  main { width: min(100% - 3rem, 72rem); margin: 0 auto; padding-bottom: 4rem; }
+  a { color: var(--green); text-underline-offset: .2em; }
+  :focus-visible { outline: 2px solid #6a8260; outline-offset: 4px; }
+
+  #navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem 0;
+    margin-bottom: .35rem;
+  }
+  .brand { display: inline-flex; align-items: center; gap: .65rem; text-decoration: none; }
+  .brand-name { color: var(--ink); font: 1.75rem/1 var(--serif); white-space: nowrap; }
+  .brand-mark {
+    position: relative;
+    display: inline-block;
+    width: 2.15rem;
+    height: 2.4rem;
+    flex: none;
+    border-radius: 60% 60% .45rem .45rem;
+    background: var(--green);
+  }
+  .brand-mark::before, .brand-mark::after {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gold);
+    border-radius: 1px;
+    content: "";
+  }
+  .brand-mark::before { top: .6rem; width: .13rem; height: 1.18rem; }
+  .brand-mark::after { top: .95rem; width: .75rem; height: .13rem; }
+  .nav-links { display: flex; gap: .2rem; align-items: center; }
+  .nav-links a {
+    font-size: .9375rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-decoration: none;
+    border-radius: 99px;
+    padding: .6rem .9rem;
+  }
+  .nav-links a:hover { background: #ebece1; color: var(--green-dark); }
+  .public-watch .nav-links a:not([href="/watch"]) { display: none; }
+  .nav-links a[aria-current="page"] { background: #e4e9db; color: var(--green-dark); }
+
+  .hero {
+    display: grid;
+    align-content: center;
+    min-height: 16.5rem;
+    padding: clamp(1.65rem, 5vw, 3.75rem);
+    background: linear-gradient(90deg, #172c22 9%, #172c22ed 29%, #172c2266 64%, #172c2226),
+      #172c22 url("/assets/sanctuary.webp") right 46% / cover no-repeat;
+    color: #fffaf0;
+    border: 1px solid #303e2c;
+    border-radius: 1.2rem;
+  }
+  .hero h1 { margin: 0; max-width: 14ch; font: clamp(3rem, 6.3vw, 5.5rem)/.94 var(--serif); }
+  .hero p { color: #eadfc8; max-width: 37ch; margin: .85rem 0 0; }
+  #watch .hero { min-height: 12rem; }
+
+  #program { display: grid; grid-template-columns: 1.08fr 1fr; gap: 1rem; margin-top: 1rem; align-items: start; }
+  .program-section {
+    min-width: 0;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    padding: clamp(1rem, 2.4vw, 1.75rem);
+  }
+  .program-section h2 { margin: 0 0 .85rem; font: 2rem/1.05 var(--serif); }
+  .manual-section { margin-top: 1rem; }
+  form, li { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem; }
+  label { width: 100%; font-size: .9375rem; font-weight: 600; }
+  input, button { font: inherit; border-radius: .55rem; padding: .62rem .82rem; }
+  input {
+    min-width: 0;
+    flex: 1 1 12rem;
+    background: #fbfbf4;
+    color: var(--ink);
+    border: 1px solid #b9c0b0;
+  }
+  input::placeholder { color: #68746a; }
+  button {
+    cursor: pointer;
+    background: var(--green);
+    color: #fffdf7;
+    border: 1px solid transparent;
+    font-weight: 600;
+  }
+  button:hover { background: var(--green-dark); }
+  button:disabled { opacity: .55; cursor: default; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { justify-content: space-between; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  #sources:not(:empty), #videos:not(:empty) { margin: .7rem 0; }
+  #sync-all, #clear-topic { margin-top: .65rem; }
+  #program-status:not(:empty) { margin: 1rem 0 0; padding: .7rem 1rem; background: #e4e9db; border-radius: .55rem; }
+  #program-status:empty, #admin-status:empty { margin: 0; }
+  .topic-cloud, .source-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .source-details { display: grid; gap: .2rem; overflow-wrap: anywhere; min-width: 0; }
+  .secondary { background: #f2f4e9; color: var(--green-dark); border-color: #c3cdbb; }
+  .secondary:hover { background: #e4e9db; }
+  .topic-cloud button { background: #e8eddf; color: var(--green-dark); border-radius: 99px; font-size: var(--topic-size); }
+  .topic-cloud button:hover, .topic-cloud button[aria-pressed="true"] { background: var(--green); color: #fffdf7; }
+  .supporting, #weekly-program { color: var(--muted); }
+  #coverage { margin: -.35rem 0 .65rem; }
+  #weekly-program {
+    padding: .65rem .85rem;
+    background: #f0f1e7;
+    border-left: 2px solid #a69b64;
+    border-radius: .35rem;
+    margin: 0 0 .8rem;
+  }
+  #topic-empty { margin-bottom: 0; }
+  #publish-topic { margin-top: .8rem; justify-content: space-between; }
+  #topic-preview { margin: .25rem 0; }
+  #admin-status { color: var(--muted); }
+
+  .screen { aspect-ratio: 16 / 9; background: #121a14; margin-top: 1rem; border-radius: 1rem; overflow: hidden; }
+  .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
+  #now-playing-topic { margin: 1rem 0 0; font: 1.8rem/1.1 var(--serif); }
+  #play-status { color: var(--muted); }
+  #broadcast-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin-top: .8rem; }
+  #broadcast-controls p { margin: 0; color: var(--muted); }
+  body.signage { background: #000; }
+  body.signage main { width: 100%; padding: 0; }
+  body.signage .hero { display: none; }
+  body.signage .screen { height: 100dvh; margin: 0; border-radius: 0; background: #000; }
+  #exit-signage { display: none; }
+  body.signage #exit-signage {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1;
+    padding: .5rem .9rem;
+    text-decoration: none;
+    background: var(--green-dark);
+    color: #fffaf0;
+    border: 1px solid #87918a;
+    border-radius: .55rem;
+  }
+  body.signage #play-status { color: #fffaf0; position: fixed; inset: auto 1rem 1rem; text-align: center; pointer-events: none; }
+
+  @media (max-width: 48rem) {
+    #program { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 33rem) {
+    main { width: calc(100% - 1.5rem); }
+    #navigation { align-items: flex-start; flex-direction: column; gap: .65rem; }
+    .nav-links a { padding: .55rem .7rem; }
+    .hero {
+      min-height: 14rem;
+      background-image: linear-gradient(90deg, #172c22f5 10%, #172c22b8 60%, #172c2240), url("/assets/sanctuary.webp");
+      background-position: center, 68% center;
+    }
+    #watch .hero { min-height: 10rem; }
+  }
+</style>
+<main>
+  <header id="navigation">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">24/7 Preaching</span>
+    </a>
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="/">Programming</a>
+      <a href="/watch">Watch</a>
+      <a href="/signage">Signage</a>
+    </nav>
+  </header>
+  <section id="admin" hidden>
+    <div class="hero">
+      <h1>Church<br>programming</h1>
+      <p>Approve your sources, then choose a weekly topic for Watch and Signage.</p>
+    </div>
+    <p id="program-status" role="status"></p>
+    <section id="program" hidden>
+      <section class="program-section">
+        <h2>Trusted sources</h2>
+        <form id="add-source">
+          <label for="source">YouTube channel or playlist</label>
+          <input id="source" required maxlength="512" placeholder="Channel link, @handle, or playlist link">
+          <button>Approve source</button>
+        </form>
+        <p id="source-setup" class="supporting" hidden>Set YOUTUBE_API_KEY in Sites production secrets to import sources.</p>
+        <ul id="sources"></ul>
+        <button type="button" id="sync-all" class="secondary" hidden>Sync all sources</button>
+      </section>
+      <section class="program-section">
+        <h2>Topic cloud</h2>
+        <p id="coverage" class="supporting"></p>
+        <p id="weekly-program"></p>
+        <div id="topics" class="topic-cloud" aria-label="Topics by number of matching videos"></div>
+        <p id="topic-empty" class="supporting" hidden>Topics appear when video titles match a topic. Add a trusted source or sync existing sources to build your cloud.</p>
+        <form id="publish-topic" hidden>
+          <p id="topic-preview"></p>
+          <button>Use this topic for the week</button>
+        </form>
+        <button type="button" id="clear-topic" class="secondary" hidden>Use all approved videos</button>
+      </section>
+    </section>
+    <section class="program-section manual-section">
+      <h2>Individually approved videos</h2>
+      <form id="approve">
+        <label for="video">YouTube video link or ID</label>
+        <input id="video" required maxlength="512" placeholder="https://www.youtube.com/watch?v=…">
+        <button>Approve video</button>
+      </form>
+      <p id="admin-status" role="status"></p>
+      <ul id="videos"></ul>
+    </section>
+  </section>
+  <a id="exit-signage" href="/watch">Exit signage</a>
+  <section id="watch" hidden>
+    <div class="hero">
+      <h1>Watch</h1>
+      <p>Join the church broadcast at the point everyone else is watching.</p>
+    </div>
+    <p id="now-playing-topic" hidden></p>
+    <div class="screen"><div id="player"></div></div>
+    <p id="play-status" role="status">Loading the approved loop…</p>
+    <div id="broadcast-controls" hidden>
+      <button id="join-broadcast" hidden>Join live</button>
+      <button id="copy-watch" class="secondary">Copy Watch link</button>
+      <p id="share-status" role="status"></p>
+    </div>
+  </section>
+</main>
+<script>
+  const endpoint = '/api/approved-videos';
+  const element = id => document.getElementById(id);
+  async function readVideos() {
+    const response = await fetch(endpoint, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Could not load the approved videos.');
+    return (await response.json()).videoIds;
+  }
+
+  async function updateVideo(method, video) {
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video }),
+    });
+    if (!response.ok) throw new Error((await response.json()).error || 'Could not update the list.');
+  }
+
+  async function renderVideos() {
+    const ids = await readVideos();
+    element('videos').replaceChildren(...ids.map(id => {
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = 'https://www.youtube.com/watch?v=' + id;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = id;
+      const remove = document.createElement('button');
+      remove.textContent = 'Remove';
+      remove.setAttribute('aria-label', 'Remove video ' + id);
+      remove.onclick = async () => {
+        remove.disabled = true;
+        try {
+          await updateVideo('DELETE', id);
+          await renderVideos();
+          element('admin-status').textContent = 'Video removed.';
+        } catch (error) {
+          element('admin-status').textContent = error.message;
+          remove.disabled = false;
+        }
+      };
+      item.append(link, remove);
+      return item;
+    }));
+    if (!ids.length) element('admin-status').textContent = 'No approved videos yet.';
+  }
+
+  const programStatus = element('program-status');
+  let selectedTopic = null;
+  let working = false;
+
+  async function programApi(action, data) {
+    const response = await fetch('/api/program/' + action, data ? {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    } : { cache: 'no-store' });
+    if (response.status === 403 && action === 'summary') return null;
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not update the program.');
+    return result;
+  }
+
+  function actionButton(label, callback) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'secondary';
+    button.textContent = label;
+    button.onclick = () => runProgramAction(callback);
+    return button;
+  }
+
+  async function syncSource(source) {
+    let result;
+    do {
+      programStatus.textContent = 'Syncing ' + source.title + '…';
+      result = await programApi('sync-source', { key: source.key });
+    } while (result.more);
+    return result.total;
+  }
+
+  async function renderProgram() {
+    const data = await programApi('summary');
+    if (!data) return;
+    element('program').hidden = false;
+    element('source-setup').hidden = data.youtubeConfigured;
+    const titlePending = data.total - data.titlesAvailable;
+    element('coverage').textContent = data.matched + ' of ' + data.total +
+      ' unique videos matched by title' + (titlePending ? ' · ' + titlePending + ' awaiting titles' : '');
+    const list = element('sources');
+    list.replaceChildren();
+    for (const source of data.sources) {
+      const item = document.createElement('li');
+      const details = document.createElement('div');
+      details.className = 'source-details';
+      const title = document.createElement('strong');
+      title.textContent = source.title;
+      const count = document.createElement('span');
+      count.className = 'supporting';
+      count.textContent = (source.type === 'channel' ? 'Channel' : 'Playlist') + ' · ' +
+        source.total + ' videos' +
+        (source.syncing ? ' · Sync incomplete' : source.needsTitleSync ? ' · Titles need syncing' : '');
+      details.append(title, count);
+      const actions = document.createElement('div');
+      actions.className = 'source-actions';
+      const sync = actionButton(source.syncing ? 'Resume sync' : 'Sync', async () =>
+        'Synced ' + (await syncSource(source)) + ' videos from ' + source.title + '.');
+      sync.disabled = !data.youtubeConfigured;
+      actions.append(sync);
+      if (source.syncing) actions.append(actionButton('Discard partial sync', async () => {
+        await programApi('cancel-sync', { key: source.key });
+        return 'Partial sync discarded.';
+      }));
+      actions.append(actionButton('Remove', async () => {
+        await programApi('remove-source', { key: source.key });
+        return 'Source removed from your program.';
+      }));
+      item.append(details, actions);
+      list.append(item);
+    }
+    const syncAll = element('sync-all');
+    syncAll.hidden = !data.sources.length;
+    syncAll.disabled = !data.youtubeConfigured;
+    syncAll.onclick = () => runProgramAction(() => syncSources(data.sources, 'All trusted sources synced.'));
+
+    element('weekly-program').textContent = data.selection
+      ? 'Current topic: ' + data.selection.topic + ' · Ends ' + new Date(data.selection.endsAt).toLocaleString()
+      : 'Watch and Signage are using all approved videos.';
+    element('clear-topic').hidden = !data.selection;
+    const cloud = element('topics');
+    cloud.replaceChildren();
+    element('topic-empty').hidden = Boolean(data.topics.length);
+    if (!data.topics.some(topic => topic.name === selectedTopic)) selectedTopic = null;
+    function showTopic() {
+      const topic = data.topics.find(topic => topic.name === selectedTopic);
+      element('publish-topic').hidden = !topic;
+      if (topic) element('topic-preview').textContent = topic.name + ' · ' +
+        topic.count + ' matching ' + (topic.count === 1 ? 'video' : 'videos');
+      for (const button of cloud.children) {
+        button.setAttribute('aria-pressed', String(button.dataset.topic === selectedTopic));
+      }
+    }
+    for (const topic of data.topics) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.topic = topic.name;
+      button.textContent = topic.name + ' (' + topic.count + ')';
+      button.style.setProperty('--topic-size', Math.min(1.8, 1 + 0.16 * Math.log2(topic.count)) + 'rem');
+      button.onclick = () => { selectedTopic = topic.name; showTopic(); };
+      cloud.append(button);
+    }
+    showTopic();
+    return data;
+  }
+
+  async function syncSources(sources, success) {
+    const errors = [];
+    for (const source of sources) {
+      try {
+        await syncSource(source);
+      } catch (error) {
+        errors.push(source.title + ' — ' + error.message);
+      }
+    }
+    return errors.length ? errors.join(' ') : success;
+  }
+
+  async function runProgramAction(action) {
+    if (working) return;
+    working = true;
+    const program = element('program');
+    program.setAttribute('aria-busy', 'true');
+    const controls = [...program.querySelectorAll('button:not(:disabled)')];
+    controls.forEach(button => { button.disabled = true; });
+    let message;
+    try {
+      message = await action();
+    } catch (error) {
+      message = error.message;
+    }
+    controls.forEach(button => { button.disabled = false; });
+    try {
+      await renderProgram();
+    } catch (error) {
+      message += ' ' + error.message;
+    } finally {
+      program.removeAttribute('aria-busy');
+      working = false;
+      programStatus.textContent = message;
+    }
+  }
+
+  element('add-source').onsubmit = event => {
+    event.preventDefault();
+    runProgramAction(async () => {
+      const input = element('source');
+      const source = input.value.trim();
+      programStatus.textContent = 'Looking up the source…';
+      const { key } = await programApi('add-source', { source });
+      input.value = '';
+      const count = await syncSource({ key, title: source });
+      return 'Source approved. Imported ' + count + ' videos.';
+    });
+  };
+
+  element('publish-topic').onsubmit = event => {
+    event.preventDefault();
+    runProgramAction(async () => {
+      const { selection } = await programApi('publish', { topic: selectedTopic });
+      return selection.topic + ' is now playing on Watch and Signage.';
+    });
+  };
+  element('clear-topic').onclick = () => runProgramAction(async () => {
+    await programApi('publish', { topic: null });
+    return 'Watch and Signage are using all approved videos.';
+  });
+
+  const signage = location.pathname === '/signage';
+  for (const link of document.querySelectorAll('.nav-links a')) {
+    if (link.pathname === location.pathname) link.setAttribute('aria-current', 'page');
+  }
+  if (location.pathname === '/') {
+    element('admin').hidden = false;
+    const form = element('approve');
+    form.onsubmit = async event => {
+      event.preventDefault();
+      const button = form.querySelector('button');
+      button.disabled = true;
+      try {
+        await updateVideo('POST', element('video').value);
+        element('video').value = '';
+        await renderVideos();
+        element('admin-status').textContent = 'Video approved.';
+      } catch (error) {
+        element('admin-status').textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    };
+    renderProgram().then(data => {
+      if (!data?.youtubeConfigured) return;
+      const legacy = data.sources.filter(source => source.needsTitleSync);
+      if (legacy.length) runProgramAction(() => syncSources(legacy, 'Video titles are up to date.'));
+    }).catch(error => { programStatus.textContent = error.message; });
+    renderVideos().catch(error => { element('admin-status').textContent = error.message; });
+  } else {
+    element('watch').hidden = false;
+    if (signage) {
+      document.body.classList.add('signage');
+      element('navigation').hidden = true;
+    } else {
+      element('broadcast-controls').hidden = false;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://www.youtube.com/iframe_api';
+    script.onerror = () => { element('play-status').textContent = 'Could not load YouTube. Refresh to retry.'; };
+    document.head.append(script);
+  }
+
+  let player, current, loading = false;
+  const failed = new Set();
+  const playStatus = element('play-status');
+
+  async function advance() {
+    if (loading) return;
+    loading = true;
+    try {
+      const response = await fetch('/api/playback', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not load the approved loop.');
+      const { videoIds: ids, selection } = await response.json();
+      const topic = element('now-playing-topic');
+      topic.hidden = signage || !selection;
+      topic.textContent = selection?.topic ?? '';
+      const start = ids.indexOf(current) + 1;
+      const next = [...ids.slice(start), ...ids.slice(0, start)].find(id => !failed.has(id));
+      if (!next) {
+        playStatus.textContent = ids.length ? 'Waiting to retry unavailable videos…' : (selection ? 'No approved videos match ' + selection.topic + '.' : 'No approved videos yet.');
+        failed.clear();
+        setTimeout(advance, 30000);
+        return;
+      }
+      current = next;
+      playStatus.textContent = '';
+      player.loadVideoById(next);
+    } catch (error) {
+      playStatus.textContent = error.message + ' Retrying shortly.';
+      setTimeout(advance, 15000);
+    } finally {
+      loading = false;
+    }
+  }
+
+  const join = element('join-broadcast');
+  let onAir, loadedSlot, failedSlot, syncTimer, lastLoad = -Infinity;
+  let syncInFlight = false;
+  let autoplayBlocked = false;
+
+  function estimatedBroadcastTime() {
+    return onAir.serverNow + (performance.now() - onAir.receivedAt);
+  }
+
+  function playBroadcastSlot() {
+    const now = estimatedBroadcastTime();
+    if (now >= onAir.endsAt) {
+      refreshBroadcast();
+      return;
+    }
+    loadedSlot = onAir.key;
+    lastLoad = performance.now();
+    player.loadVideoById({
+      videoId: onAir.videoId,
+      startSeconds: Math.max(0, (now - onAir.startsAt) / 1000),
+    });
+  }
+
+  join.onclick = () => {
+    if (!onAir) return;
+    autoplayBlocked = false;
+    failedSlot = null;
+    join.hidden = true;
+    playBroadcastSlot();
+  };
+
+  element('copy-watch').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(location.origin + '/watch');
+      element('share-status').textContent = 'Watch link copied.';
+    } catch {
+      element('share-status').textContent = 'Copy the address from your browser to share Watch.';
+    }
+  };
+
+  async function refreshBroadcast() {
+    if (syncInFlight) return;
+    syncInFlight = true;
+    clearTimeout(syncTimer);
+    let delay = 10000;
+    try {
+      const sentAt = performance.now();
+      const response = await fetch('/api/broadcast', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not reach the broadcast.');
+      const slot = await response.json();
+      const receivedAt = performance.now();
+      const topic = element('now-playing-topic');
+      topic.hidden = !slot.topic;
+      topic.textContent = slot.topic ?? '';
+
+      if (slot.state !== 'live') {
+        if (loadedSlot) player.stopVideo();
+        onAir = loadedSlot = null;
+        join.hidden = true;
+        playStatus.textContent = slot.state === 'preparing' ? 'Preparing the broadcast…'
+          : slot.state === 'empty' ? 'No videos are scheduled right now.'
+          : 'The broadcast is temporarily unavailable.';
+        if (slot.state === 'preparing') delay = 2500;
+        return;
+      }
+      onAir = {
+        ...slot,
+        serverNow: slot.serverNow + (receivedAt - sentAt) / 2,
+        receivedAt,
+        key: slot.videoId + ':' + slot.startsAt,
+      };
+      const now = estimatedBroadcastTime();
+      delay = Math.max(350, Math.min(delay, slot.endsAt - now + 150));
+      if (now >= slot.endsAt) return;
+
+      if (autoplayBlocked) {
+        join.hidden = false;
+        playStatus.textContent = 'Select Join live to start watching.';
+      } else if (failedSlot !== onAir.key) {
+        if (onAir.key !== loadedSlot) {
+          join.hidden = true;
+          playStatus.textContent = '';
+          playBroadcastSlot();
+        } else if (performance.now() - lastLoad > 10000 &&
+                   player.getPlayerState() === YT.PlayerState.PLAYING &&
+                   player.getVideoData()?.video_id === slot.videoId) {
+          const target = (now - slot.startsAt) / 1000;
+          if (Math.abs(player.getCurrentTime() - target) > 4) player.seekTo(target, true);
+        }
+      }
+    } catch (error) {
+      playStatus.textContent = error.message + ' Retrying shortly.';
+    } finally {
+      syncInFlight = false;
+      syncTimer = setTimeout(refreshBroadcast, delay);
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!signage && location.pathname === '/watch' && player && !document.hidden) refreshBroadcast();
+  });
+
+  window.onYouTubeIframeAPIReady = () => {
+    player = new YT.Player('player', {
+      playerVars: { playsinline: 1, origin: location.origin },
+      events: {
+        onReady: () => {
+          if (signage) {
+            player.mute();
+            advance();
+          } else {
+            refreshBroadcast();
+          }
+        },
+        onStateChange: ({ data }) => {
+          if (data === YT.PlayerState.PLAYING) {
+            failed.clear();
+            join.hidden = true;
+            playStatus.textContent = '';
+          }
+          if (data === YT.PlayerState.ENDED) (signage ? advance : refreshBroadcast)();
+        },
+        onAutoplayBlocked: () => {
+          if (signage) {
+            playStatus.textContent = 'Press play to start the loop.';
+          } else {
+            autoplayBlocked = true;
+            join.hidden = !onAir;
+            playStatus.textContent = 'Select Join live to start watching.';
+          }
+        },
+        onError: () => {
+          if (signage) {
+            if (current) failed.add(current);
+            advance();
+          } else {
+            failedSlot = loadedSlot;
+            playStatus.textContent = 'This video could not play. The broadcast will resume with the next video.';
+          }
+        },
+      },
+    });
+  };
+</script>
+</html>
