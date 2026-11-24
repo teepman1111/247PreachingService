@@ -1,3 +1,5 @@
+import { defaultChannel, validateChannel } from './channel.mjs';
+import { individuallyApprovedIds } from './approved-videos.mjs';
 import { loadSourcePage, parseSource, resolveSource } from './youtube-sources.mjs';
 import { titleMatchesTopic, topicsForTitle } from './title-topics.mjs';
 
@@ -76,6 +78,8 @@ function describeProgram(program, env) {
     titlesAvailable,
     topics: [...counts].map(([name, count]) => ({ name, count }))
       .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name)),
+    channel: program.channel ?? defaultChannel,
+    channelRevision: program.channelRevision ?? null,
     selection: currentSelection(program),
     youtubeConfigured: Boolean(env.YOUTUBE_API_KEY),
   };
@@ -121,12 +125,20 @@ async function syncSource(env, key) {
   });
 }
 
+export async function readChannel(bucket) {
+  const { program } = await readProgram(bucket);
+  return program.channel ?? defaultChannel;
+}
+
 export async function readPlaybackProgram(bucket) {
   const { program } = await readProgram(bucket);
   const selection = currentSelection(program);
   const videos = catalog(program);
   return {
     selection,
+    channel: program.channel ?? defaultChannel,
+    excluded: program.excluded ?? [],
+    titles: Object.fromEntries([...videos].map(([id, { title }]) => [id, title])),
     videoIds: selection
       ? [...videos].filter(([, { title }]) => titleMatchesTopic(title, selection.topic)).map(([id]) => id)
       : [...videos.keys()],
@@ -139,7 +151,16 @@ export async function programRequest(request, env, action) {
     return respond({ error: 'Church admin access is required.' }, 403);
   }
   if (action === 'summary' && request.method === 'GET') {
-    return respond(describeProgram((await readProgram(env.BUCKET)).program, env));
+    const { program } = await readProgram(env.BUCKET);
+    const videos = catalog(program);
+    for (const id of await individuallyApprovedIds(env.BUCKET)) {
+      if (!videos.has(id)) videos.set(id, { title: '' });
+    }
+    return respond({
+      ...describeProgram(program, env),
+      excluded: program.excluded ?? [],
+      videos: [...videos].map(([id, { title }]) => ({ id, title })),
+    });
   }
   if (request.method !== 'POST' || action === 'summary') return respond({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('Origin') !== new URL(request.url).origin ||
@@ -176,6 +197,34 @@ export async function programRequest(request, env, action) {
           }
           return { ok: true };
         }));
+      case 'set-video-availability': {
+        const manual = await individuallyApprovedIds(env.BUCKET);
+        return respond(await changeProgram(env.BUCKET, program => {
+          if (typeof body.excluded !== 'boolean' || (!manual.includes(body.id) && !catalog(program).has(body.id))) {
+            throw new ProgramError('Choose an approved video.', 400);
+          }
+          const excluded = new Set(program.excluded ?? []);
+          if (body.excluded) excluded.add(body.id);
+          else excluded.delete(body.id);
+          program.excluded = [...excluded];
+          return { ok: true };
+        }));
+      }
+      case 'save-channel': {
+        const manual = await individuallyApprovedIds(env.BUCKET);
+        return respond(await changeProgram(env.BUCKET, program => {
+          if (body.revision !== (program.channelRevision ?? null)) {
+            throw new ProgramError('Channel settings changed. Reload Programming and try again.', 409);
+          }
+          try {
+            program.channel = validateChannel(body, new Set([...manual, ...catalog(program).keys()]));
+          } catch (error) {
+            throw new ProgramError(error.message, 400);
+          }
+          program.channelRevision = crypto.randomUUID();
+          return { channel: program.channel, channelRevision: program.channelRevision };
+        }));
+      }
       case 'publish':
         return respond(await changeProgram(env.BUCKET, program => {
           if (body.topic === null) {

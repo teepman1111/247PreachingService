@@ -75,3 +75,31 @@ rules can temporarily affect timing.
 Sites access is public so Watch can be opened by anyone with the link. The
 Worker requires the signed-in site owner for Programming, Signage, and their
 APIs. The public broadcast endpoint exposes the current video and timing.
+
+### Church channel pilot
+
+In **Programming**, approve a church-curated YouTube playlist or individual
+sermons. Under **Channel & weekly schedule**, set the channel name, local time
+zone, and prayer request link. Add recurring airings from approved videos. Use
+the optional speaker, Scripture and study link fields for each scheduled
+message. Publish the settings and open the Watch preview to confirm the guide.
+
+For example, schedule Sunday's message every evening at 7 p.m. and a related
+series for Wednesday. Scheduled messages start at their local airtime and can
+interrupt the rotation. The approved rotation resumes after each airing.
+Ambiguous times during a fall clock change air once at the earlier occurrence.
+Times skipped by a spring clock change have no airing that day. Use **Take off
+air** when you need to stop an approved sermon from appearing in either public
+Watch or Signage. It stays listed for staff so they can restore it.
+
+**Invite your congregation** provides bulletin copy and a branded announcement
+slide with a QR code. Share the same `/watch` link each week. During a four-week
+pilot, look at the 28-day activity report and record how long the weekly
+program takes to prepare. The report counts playback starts per page session,
+returning tune-ins estimated from browser storage, and player errors. The
+counts are estimates and contain no stored viewer identities.
+
+Each pilot church needs its own deployment, storage binding, approved catalog,
+and `SITE_ADMIN_EMAIL`. YouTube embeds still depend on YouTube availability,
+advertising, and browser playback rules. The public player tries approved
+backup sermons on a playback error and rejoins the guide at the next slot.

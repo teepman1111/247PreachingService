@@ -38,7 +38,7 @@
     margin-bottom: .35rem;
   }
   .brand { display: inline-flex; align-items: center; gap: .65rem; text-decoration: none; }
-  .brand-name { color: var(--ink); font: 1.75rem/1 var(--serif); white-space: nowrap; }
+  .brand-name { overflow-wrap: anywhere; color: var(--ink); font: 1.75rem/1 var(--serif); }
   .brand-mark {
     position: relative;
     display: inline-block;
@@ -170,7 +170,28 @@
   }
   body.signage #play-status { color: #fffaf0; position: fixed; inset: auto 1rem 1rem; text-align: center; pointer-events: none; }
 
+  .channel-form { display: grid; align-items: stretch; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .75rem; }
+  .fields label, .moderation label { display: grid; gap: .3rem; min-width: 0; }
+  .fields input, select { width: 100%; }
+  select { font: inherit; padding: .62rem .82rem; border: 1px solid #b9c0b0; border-radius: .55rem; background: #fbfbf4; color: var(--ink); }
+  .airing { min-width: 0; border: 1px solid var(--line); border-radius: .6rem; padding: .8rem; margin: .7rem 0; }
+  .airing button { margin-top: .75rem; }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
+  .moderation { margin-top: 1rem; }
+  .moderation label { max-width: 28rem; }
+  #channel-status:empty, #kit-status:empty { display: none; }
+  .guide { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; margin-top: 1rem; }
+  .guide-title { display: block; font: 1.55rem/1.15 var(--serif); overflow-wrap: anywhere; }
+  .guide-label { color: var(--muted); font-weight: 600; }
+  .guide p { margin: .35rem 0 0; }
+  #weekly-guide { margin-top: 1rem; }
+  #weekly-guide li { justify-content: flex-start; }
+  #weekly-guide li time { min-width: 12rem; color: var(--muted); }
+  .public-watch .nav-links { display: none; }
+
   @media (max-width: 48rem) {
+    .guide { grid-template-columns: 1fr; }
     #program { grid-template-columns: 1fr; }
   }
   @media (max-width: 33rem) {
@@ -203,6 +224,60 @@
       <p>Approve your sources, then choose a weekly topic for Watch and Signage.</p>
     </div>
     <p id="program-status" role="status"></p>
+    <section class="program-section manual-section" id="channel-settings" hidden>
+      <h2>Channel &amp; weekly schedule</h2>
+      <p class="supporting">Choose recurring local airtimes. The approved rotation fills the rest of the week.</p>
+      <form id="channel-form" class="channel-form">
+        <div class="fields">
+          <label>Channel name<input name="name" maxlength="80" required></label>
+          <label>Time zone<input name="timeZone" maxlength="80" placeholder="America/Chicago" required></label>
+          <label>Prayer request link<input name="prayerUrl" type="url" maxlength="1024" placeholder="https://"></label>
+        </div>
+        <div id="airings"></div>
+        <div class="actions">
+          <button type="button" class="secondary" id="add-airing">Add weekly airing</button>
+          <button>Publish channel settings</button>
+          <a id="preview-watch" href="/watch" target="_blank" rel="noopener">Preview channel</a>
+        </div>
+        <p id="channel-status" role="status"></p>
+      </form>
+      <template id="airing-template">
+        <fieldset class="airing">
+          <legend>Weekly airing</legend>
+          <div class="fields">
+            <label>Day<select name="day"></select></label>
+            <label>Start time<input name="time" type="time" required></label>
+            <label>Approved video<select name="videoId" required></select></label>
+            <label>Sermon title<input name="title" maxlength="160" placeholder="Use YouTube title"></label>
+            <label>Speaker<input name="speaker" maxlength="100"></label>
+            <label>Scripture passage<input name="scripture" maxlength="100"></label>
+            <label>Notes or discussion guide<input name="notesUrl" type="url" maxlength="1024" placeholder="https://"></label>
+          </div>
+          <button type="button" class="secondary">Remove airing</button>
+        </fieldset>
+      </template>
+      <div class="actions moderation">
+        <label>Manage an approved video<select id="catalog-video"></select></label>
+        <button type="button" class="secondary" id="toggle-video" disabled>Take off air</button>
+      </div>
+    </section>
+    <section class="program-section manual-section" id="pilot-report" hidden>
+      <h2>Pilot activity</h2>
+      <p class="supporting">Last 28 days. Counts are estimates from this channel’s Watch page.</p>
+      <button class="secondary" id="refresh-pilot" type="button">Refresh activity</button>
+      <p id="pilot-totals" role="status"></p>
+      <details><summary>Daily activity</summary><ul id="pilot-days"></ul></details>
+    </section>
+    <section class="program-section manual-section" id="share-kit" hidden>
+      <h2>Invite your congregation</h2>
+      <p id="bulletin-copy"></p>
+      <div class="actions">
+        <button id="copy-bulletin" type="button" class="secondary">Copy bulletin text</button>
+        <a href="/invite" target="_blank" rel="noopener">Open announcement slide</a>
+      </div>
+      <p role="status" id="kit-status"></p>
+    </section>
+
     <section id="program" hidden>
       <section class="program-section">
         <h2>Trusted sources</h2>
@@ -242,12 +317,29 @@
   <a id="exit-signage" href="/watch">Exit signage</a>
   <section id="watch" hidden>
     <div class="hero">
-      <h1>Watch</h1>
-      <p>Join the church broadcast at the point everyone else is watching.</p>
+      <h1 id="watch-title">24/7 Preaching</h1>
+      <p>Sermons and teaching throughout the week.</p>
     </div>
     <p id="now-playing-topic" hidden></p>
     <div class="screen"><div id="player"></div></div>
-    <p id="play-status" role="status">Loading the approved loop…</p>
+    <p id="play-status" role="status">Loading the channel…</p>
+    <div class="guide" id="guide" hidden>
+      <section class="program-section">
+        <span id="now-label" class="guide-label">Now playing</span>
+        <strong id="now-title" class="guide-title"></strong>
+        <p id="now-details" hidden></p>
+        <div class="actions"><a id="sermon-notes" hidden>Study this message</a><a id="prayer-link" hidden>Request prayer</a></div>
+      </section>
+      <section class="program-section" id="next-card" hidden>
+        <span class="guide-label">Up next</span>
+        <strong id="next-title" class="guide-title"></strong>
+        <p id="next-time"></p>
+      </section>
+    </div>
+    <section class="program-section" id="weekly-guide" hidden>
+      <h2>Coming up this week</h2>
+      <ul id="upcoming"></ul>
+    </section>
     <div id="broadcast-controls" hidden>
       <button id="join-broadcast" hidden>Join live</button>
       <button id="copy-watch" class="secondary">Copy Watch link</button>
@@ -289,7 +381,7 @@
         remove.disabled = true;
         try {
           await updateVideo('DELETE', id);
-          await renderVideos();
+          await Promise.all([renderVideos(), renderProgram()]);
           element('admin-status').textContent = 'Video removed.';
         } catch (error) {
           element('admin-status').textContent = error.message;
@@ -336,8 +428,150 @@
     return result.total;
   }
 
+  const channelForm = element('channel-form');
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  let channelRevision, channelDirty = false, catalogVideos = [], excludedVideos = [];
+  const airingsList = element('airings');
+
+  function fillVideoOptions(select, value = '') {
+    select.replaceChildren(new Option('Choose an approved video', ''));
+    for (const { id, title } of catalogVideos) {
+      select.add(new Option((title || id) + (excludedVideos.includes(id) ? ' (off air)' : ''), id));
+    }
+    if (value && !catalogVideos.some(video => video.id === value)) {
+      select.add(new Option('Removed video · ' + value, value));
+    }
+    select.value = value;
+  }
+
+  function addAiring(slot = {}) {
+    const row = element('airing-template').content.firstElementChild.cloneNode(true);
+    const field = name => row.querySelector('[name="' + name + '"]');
+    days.forEach((day, index) => field('day').add(new Option(day, index)));
+    field('day').value = slot.day ?? 0;
+    for (const name of ['time', 'title', 'speaker', 'scripture', 'notesUrl']) {
+      field(name).value = slot[name] ?? (name === 'time' ? '19:00' : '');
+    }
+    fillVideoOptions(field('videoId'), slot.videoId);
+    row.querySelector('button').onclick = () => {
+      row.remove();
+      channelDirty = true;
+      element('add-airing').disabled = false;
+    };
+    airingsList.append(row);
+    element('add-airing').disabled = airingsList.children.length >= 28;
+  }
+
+  function renderChannel(data) {
+    catalogVideos = data.videos;
+    excludedVideos = data.excluded;
+    if (!channelDirty) {
+      channelRevision = data.channelRevision;
+      for (const name of ['name', 'timeZone', 'prayerUrl']) channelForm.elements[name].value = data.channel[name];
+      airingsList.replaceChildren();
+      data.channel.slots.forEach(addAiring);
+      element('add-airing').disabled = airingsList.children.length >= 28;
+      element('preview-watch').textContent = 'Preview ' + data.channel.name;
+      element('bulletin-copy').textContent = 'Tune in to ' + data.channel.name +
+        ' throughout the week. See what’s playing and what’s coming up at ' + location.origin + '/watch.';
+    } else {
+      airingsList.querySelectorAll('select[name="videoId"]').forEach(select => fillVideoOptions(select, select.value));
+    }
+    const picker = element('catalog-video');
+    fillVideoOptions(picker, picker.value);
+    picker.onchange();
+  }
+
+  element('add-airing').onclick = () => {
+    addAiring();
+    channelDirty = true;
+  };
+  channelForm.oninput = () => { channelDirty = true; };
+  channelForm.onsubmit = async event => {
+    event.preventDefault();
+    const data = new FormData(channelForm);
+    const slots = [...airingsList.children].map(row => Object.fromEntries(
+      [...row.querySelectorAll('[name]')].map(field => [field.name, field.name === 'day' ? Number(field.value) : field.value])
+    ));
+    const button = event.submitter;
+    const status = element('channel-status');
+    button.disabled = true;
+    try {
+      const saved = await programApi('save-channel', {
+        name: data.get('name'), timeZone: data.get('timeZone'), prayerUrl: data.get('prayerUrl'),
+        revision: channelRevision, slots,
+      });
+      channelDirty = false;
+      renderChannel({ ...saved, videos: catalogVideos, excluded: excludedVideos });
+      status.textContent = 'Channel settings published.';
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  };
+
+  element('catalog-video').onchange = () => {
+    const id = element('catalog-video').value;
+    const button = element('toggle-video');
+    button.disabled = !catalogVideos.some(video => video.id === id);
+    button.textContent = excludedVideos.includes(id) ? 'Restore to air' : 'Take off air';
+  };
+  element('toggle-video').onclick = async () => {
+    const id = element('catalog-video').value;
+    const excluded = !excludedVideos.includes(id);
+    await runProgramAction(async () => {
+      await programApi('set-video-availability', { id, excluded });
+      return excluded ? 'Video taken off air.' : 'Video restored to air.';
+    });
+  };
+
+  element('copy-bulletin').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(element('bulletin-copy').textContent);
+      element('kit-status').textContent = 'Bulletin copy copied.';
+    } catch {
+      element('kit-status').textContent = 'Select the bulletin text to copy it.';
+    }
+  };
+
+  element('refresh-pilot').onclick = async () => {
+    const button = element('refresh-pilot');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/pilot/report', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not load activity.');
+      const { days } = await response.json();
+      const sum = field => days.reduce((total, day) => total + day[field], 0);
+      element('pilot-totals').textContent =
+        sum('tuneIns') + ' tune-ins · ' +
+        days.filter(day => {
+          const weekday = new Date(day.date + 'T00:00:00Z').getUTCDay();
+          return weekday >= 1 && weekday <= 5;
+        }).reduce((total, day) => total + day.tuneIns, 0) + ' weekday tune-ins · ' + sum('returning') + ' returning tune-ins · ' + sum('failures') + ' playback failures';
+      element('pilot-days').replaceChildren(...days.map(day => {
+        const row = document.createElement('li');
+        row.textContent = day.date + ' · ' + day.tuneIns + ' tune-ins · ' + day.returning + ' returning · ' + day.failures + ' failures';
+        return row;
+      }));
+    } catch (error) {
+      element('pilot-totals').textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  };
+
   async function renderProgram() {
     const data = await programApi('summary');
+    if (data) {
+      renderChannel(data);
+      element('channel-settings').hidden = false;
+      element('share-kit').hidden = false;
+      if (element('pilot-report').hidden) {
+        element('pilot-report').hidden = false;
+        element('refresh-pilot').click();
+      }
+    }
     if (!data) return;
     element('program').hidden = false;
     element('source-setup').hidden = data.youtubeConfigured;
@@ -486,7 +720,7 @@
       try {
         await updateVideo('POST', element('video').value);
         element('video').value = '';
-        await renderVideos();
+        await Promise.all([renderVideos(), renderProgram()]);
         element('admin-status').textContent = 'Video approved.';
       } catch (error) {
         element('admin-status').textContent = error.message;
@@ -510,7 +744,11 @@
     }
     const script = document.createElement('script');
     script.src = 'https://www.youtube.com/iframe_api';
-    script.onerror = () => { element('play-status').textContent = 'Could not load YouTube. Refresh to retry.'; };
+    script.onerror = () => {
+      youtubeUnavailable = true;
+      element('play-status').textContent = 'Could not load YouTube. Refresh to retry.';
+      if (isWatch) recordPilotEvent('playbackFailures');
+    };
     document.head.append(script);
   }
 
@@ -547,6 +785,91 @@
     }
   }
 
+  const isWatch = location.pathname === '/watch';
+  let watchReady = false;
+  let youtubeUnavailable = false;
+  let fallbackVideo;
+  const failedAlternates = new Set();
+  let tuneInRecorded = false;
+  let reportedFailure = false;
+
+  function recordPilotEvent(event) {
+    fetch('/api/pilot/event?event=' + event, { method: 'POST', keepalive: true }).catch(() => {});
+  }
+
+  function recordTuneIn() {
+    if (tuneInRecorded) return;
+    tuneInRecorded = true;
+    let returning = false;
+    try {
+      const last = Number(localStorage.getItem('church-channel-last-tune-in'));
+      returning = last > 0 && Date.now() - last >= 30 * 60000;
+      localStorage.setItem('church-channel-last-tune-in', Date.now());
+    } catch {}
+    recordPilotEvent(returning ? 'returningTuneIns' : 'tuneIns');
+  }
+
+  function displayLink(id, url) {
+    const link = element(id);
+    if (url) link.href = url;
+    else link.removeAttribute('href');
+    link.hidden = !url;
+  }
+
+  function renderGuide(slot) {
+    const live = slot.state === 'live';
+    const shown = fallbackVideo ?? slot;
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      timeZone: slot.channel.timeZone, weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    });
+    element('watch-title').textContent = slot.channel.name;
+    document.querySelector('.brand-name').textContent = slot.channel.name;
+    document.title = slot.channel.name + ' · Watch';
+    element('guide').hidden = !live && !slot.channel.prayerUrl;
+    element('now-label').hidden = !live;
+    element('now-label').textContent = fallbackVideo ? 'Backup programming' : 'Now playing';
+    element('now-title').textContent = live ? shown.title : '';
+    const details = [shown.speaker, shown.scripture].filter(Boolean).join(' · ');
+    element('now-details').textContent = details;
+    element('now-details').hidden = !details;
+    displayLink('sermon-notes', live && shown.notesUrl);
+    displayLink('prayer-link', slot.channel.prayerUrl);
+    element('next-card').hidden = !slot.next;
+    if (slot.next) {
+      element('next-title').textContent = slot.next.title;
+      element('next-time').textContent = formatter.format(slot.next.startsAt);
+    }
+    element('weekly-guide').hidden = !slot.upcoming?.length;
+    element('upcoming').replaceChildren(...(slot.upcoming ?? []).map(airing => {
+      const row = document.createElement('li');
+      const time = document.createElement('time');
+      time.dateTime = new Date(airing.startsAt).toISOString();
+      time.textContent = formatter.format(airing.startsAt);
+      const title = document.createElement('strong');
+      title.textContent = airing.title;
+      row.append(time, title);
+      return row;
+    }));
+  }
+
+  function playAlternate() {
+    if (!onAir || estimatedBroadcastTime() >= onAir.endsAt) {
+      refreshBroadcast();
+      return;
+    }
+    fallbackVideo = onAir.fallback.find(video => !failedAlternates.has(video.videoId));
+    renderGuide(onAir);
+    if (fallbackVideo) {
+      playStatus.textContent = 'Playing a backup sermon until the next scheduled message.';
+      player.loadVideoById(fallbackVideo.videoId);
+    } else {
+      player.stopVideo();
+      join.hidden = false;
+      join.textContent = 'Retry playback';
+      playStatus.textContent = 'This message is unavailable. Retry or tune in for the next message.';
+    }
+  }
+
   const join = element('join-broadcast');
   let onAir, loadedSlot, failedSlot, syncTimer, lastLoad = -Infinity;
   let syncInFlight = false;
@@ -562,6 +885,8 @@
       refreshBroadcast();
       return;
     }
+    fallbackVideo = null;
+    renderGuide(onAir);
     loadedSlot = onAir.key;
     lastLoad = performance.now();
     player.loadVideoById({
@@ -573,7 +898,13 @@
   join.onclick = () => {
     if (!onAir) return;
     autoplayBlocked = false;
+    if (fallbackVideo) {
+      join.hidden = true;
+      player.playVideo();
+      return;
+    }
     failedSlot = null;
+    failedAlternates.clear();
     join.hidden = true;
     playBroadcastSlot();
   };
@@ -592,6 +923,7 @@
     syncInFlight = true;
     clearTimeout(syncTimer);
     let delay = 10000;
+    let playAlternateAfterRefresh = false;
     try {
       const sentAt = performance.now();
       const response = await fetch('/api/broadcast', { cache: 'no-store' });
@@ -601,6 +933,17 @@
       const topic = element('now-playing-topic');
       topic.hidden = !slot.topic;
       topic.textContent = slot.topic ?? '';
+
+      const key = slot.videoId + ':' + slot.startsAt;
+      if (slot.state !== 'live' || key !== onAir?.key) {
+        fallbackVideo = null;
+        failedAlternates.clear();
+        reportedFailure = false;
+      } else if (fallbackVideo && !slot.fallback.some(video => video.videoId === fallbackVideo.videoId)) {
+        fallbackVideo = null;
+        if (watchReady) playAlternateAfterRefresh = true;
+      }
+      renderGuide(slot);
 
       if (slot.state !== 'live') {
         if (loadedSlot) player.stopVideo();
@@ -616,14 +959,22 @@
         ...slot,
         serverNow: slot.serverNow + (receivedAt - sentAt) / 2,
         receivedAt,
-        key: slot.videoId + ':' + slot.startsAt,
+        key,
       };
       const now = estimatedBroadcastTime();
       delay = Math.max(350, Math.min(delay, slot.endsAt - now + 150));
-      if (now >= slot.endsAt) return;
+      if (now >= slot.endsAt || !watchReady) {
+        if (youtubeUnavailable) playStatus.textContent = 'Could not load YouTube. Refresh to retry.';
+        return;
+      }
+      if (playAlternateAfterRefresh) {
+        playAlternate();
+        return;
+      }
 
       if (autoplayBlocked) {
         join.hidden = false;
+        join.textContent = 'Join live';
         playStatus.textContent = 'Select Join live to start watching.';
       } else if (failedSlot !== onAir.key) {
         if (onAir.key !== loadedSlot) {
@@ -646,8 +997,10 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (!signage && location.pathname === '/watch' && player && !document.hidden) refreshBroadcast();
+    if (isWatch && !document.hidden) refreshBroadcast();
   });
+
+  if (isWatch) refreshBroadcast();
 
   window.onYouTubeIframeAPIReady = () => {
     player = new YT.Player('player', {
@@ -658,6 +1011,7 @@
             player.mute();
             advance();
           } else {
+            watchReady = true;
             refreshBroadcast();
           }
         },
@@ -665,9 +1019,16 @@
           if (data === YT.PlayerState.PLAYING) {
             failed.clear();
             join.hidden = true;
-            playStatus.textContent = '';
+            if (!fallbackVideo) playStatus.textContent = '';
+            if (isWatch) recordTuneIn();
           }
-          if (data === YT.PlayerState.ENDED) (signage ? advance : refreshBroadcast)();
+          if (data === YT.PlayerState.ENDED) {
+            if (signage) advance();
+            else if (fallbackVideo) {
+              failedAlternates.add(fallbackVideo.videoId);
+              playAlternate();
+            } else refreshBroadcast();
+          }
         },
         onAutoplayBlocked: () => {
           if (signage) {
@@ -683,8 +1044,14 @@
             if (current) failed.add(current);
             advance();
           } else {
+            if (!onAir) return;
             failedSlot = loadedSlot;
-            playStatus.textContent = 'This video could not play. The broadcast will resume with the next video.';
+            if (!reportedFailure) {
+              reportedFailure = true;
+              recordPilotEvent('playbackFailures');
+            }
+            if (fallbackVideo) failedAlternates.add(fallbackVideo.videoId);
+            playAlternate();
           }
         },
       },

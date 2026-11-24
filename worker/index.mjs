@@ -1,3 +1,4 @@
+import { invitation, pilotEvent, pilotReport } from './pilot.mjs';
 import { broadcastState } from './broadcast.mjs';
 import { getRandomVideo } from './get-random-video.mjs';
 import { uploadChannel } from './upload-channel.mjs';
@@ -56,6 +57,7 @@ export default {
       return pageResponse(page.replace('<main>', '<main class="public-watch">')
         .replace('class="brand" href="/"', 'class="brand" href="/watch"'));
     }
+    if (pathname === '/api/pilot/event' && request.method === 'POST') return pilotEvent(request, env);
     if (pathname === '/api/broadcast' && request.method === 'GET') {
       return Response.json(await broadcastState(env), { headers: { 'Cache-Control': 'no-store' } });
     }
@@ -72,10 +74,12 @@ export default {
       });
     }
 
+    if (pathname === '/invite' && request.method === 'GET') return invitation(request, env);
+    if (pathname === '/api/pilot/report' && request.method === 'GET') return pilotReport(env);
     if (pathname === '/api/playback' && request.method === 'GET') {
-      const { videoIds, selection } = await readPlaybackProgram(env.BUCKET);
+      const { videoIds, selection, excluded } = await readPlaybackProgram(env.BUCKET);
       const manual = selection ? [] : await individuallyApprovedIds(env.BUCKET);
-      return Response.json({ videoIds: [...new Set([...videoIds, ...manual])], selection }, {
+      return Response.json({ videoIds: [...new Set([...videoIds, ...manual])].filter(id => !excluded.includes(id)), selection }, {
         headers: { 'Cache-Control': 'no-store' },
       });
     }

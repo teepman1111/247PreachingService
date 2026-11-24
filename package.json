@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0",
-    "@netlify/functions": "^3.0.0"
+    "@netlify/functions": "^3.0.0",
+    "qrcode-generator": "^1.4.4"
   }
 }
