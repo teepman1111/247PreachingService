@@ -1,7 +1,7 @@
 const prefix = 'approved/';
 const videoIdPattern = /^[A-Za-z0-9_-]{11}$/;
 
-function videoIdFromInput(input) {
+export function videoIdFromInput(input) {
   if (typeof input !== 'string') return null;
   const value = input.trim();
   if (videoIdPattern.test(value)) return value;
@@ -12,7 +12,7 @@ function videoIdFromInput(input) {
     const [, first, second] = url.pathname.split('/');
     let id;
     if (url.hostname === 'youtu.be') id = first;
-    if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) {
+    if (['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'].includes(url.hostname)) {
       if (first === 'watch') id = url.searchParams.get('v');
       if (['shorts', 'live', 'embed'].includes(first)) id = second;
     }

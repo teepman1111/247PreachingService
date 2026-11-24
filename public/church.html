@@ -58,7 +58,7 @@
   }
   .brand-mark::before { top: .6rem; width: .13rem; height: 1.18rem; }
   .brand-mark::after { top: .95rem; width: .75rem; height: .13rem; }
-  .nav-links { display: flex; gap: .2rem; align-items: center; }
+  .nav-links { display: flex; flex-wrap: wrap; gap: .2rem; align-items: center; }
   .nav-links a {
     font-size: .9375rem;
     font-weight: 600;
@@ -189,6 +189,8 @@
   #weekly-guide li { justify-content: flex-start; }
   #weekly-guide li time { min-width: 12rem; color: var(--muted); }
   .public-watch .nav-links { display: none; }
+  .music-link { font-weight: 600; padding: .55rem .75rem; border: 1px solid var(--line); border-radius: .55rem; }
+  .customized-watch .music-link { background: var(--channel-accent); color: var(--channel-on-accent); }
 
   .church-logo { width: auto; max-width: min(10rem, 32vw); height: auto; max-height: 3rem; object-fit: contain; }
   .church-logo + .brand-mark { display: none; }
@@ -248,7 +250,9 @@
       <a href="/programming">Programming</a>
       <a href="/watch">Watch</a>
       <a href="/signage">Signage</a>
+      <a href="/music/manage">Music</a>
     </nav>
+    <!-- public-music-link -->
   </header>
   <section id="admin" hidden>
     <div class="hero">

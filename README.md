@@ -127,3 +127,18 @@ or WebP up to 1 MB), choose a heading font and two colors, and add a tagline.
 The preview updates as you edit. **Publish branding** applies the appearance
 to that church's Watch page and QR announcement slide. Changes leave the
 Watch link and programming intact.
+
+### Worship playlist
+
+Open **Manage worship playlist** from the pastor dashboard or **Music** in
+Programming. The church owner can give one music director access by entering
+the email they use to sign in with ChatGPT and sharing the editor link. The
+director can edit and publish music for that church. The owner can remove or
+replace access from the same screen.
+
+Add and reorder up to 25 songs. Each needs a YouTube video, a Spotify track,
+or an Apple Music song link. YouTube songs play on the page through YouTube’s
+player. Spotify and Apple Music links open their respective services. Save a
+draft while preparing the set list, then publish it to the church’s public
+music page. The music link stays the same week to week and appears on the
+church’s Watch page whenever a playlist is published.

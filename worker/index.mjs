@@ -1,3 +1,4 @@
+import { musicApi, musicIsPublished, musicPage } from './music.mjs';
 import { brandingRequest, brandingStyles, customPalette, escapeHtml, logoResponse, readBranding } from './branding.mjs';
 import { invitation, pilotEvent, pilotReport } from './pilot.mjs';
 import { broadcastState } from './broadcast.mjs';
@@ -50,16 +51,17 @@ function pageResponse(html, status = 200) {
   });
 }
 
-function channelPage(mode, base, branding) {
+function channelPage(mode, base, branding, hasMusic) {
   const attributes = mode === 'watch' ? ' class="public-watch' +
     (customPalette(branding) ? ' customized-watch' : '') + '" style="' + escapeHtml(brandingStyles(branding)) + '"' : '';
   const branded = page.replace('<main>', '<main' + attributes + ' data-channel-base="' + base + '" data-mode="' + mode + '">')
-    .replace(/href="\/(watch|signage|invite|programming)"/g, (_, path) => 'href="' + base + '/' + path + '"');
+    .replace(/href="\/(watch|signage|invite|programming|music\/manage)"/g, (_, path) => 'href="' + base + '/' + path + '"');
   return pageResponse(mode === 'watch'
     ? branded.replace('class="brand" href="/"', 'class="brand" href="' + base + '/watch"')
       .replace('<!-- church-logo -->', branding.logoUrl
         ? '<img class="church-logo" src="' + escapeHtml(branding.logoUrl) + '" alt="">' : '')
       .replace('<!-- church-tagline -->', () => escapeHtml(branding.tagline))
+      .replace('<!-- public-music-link -->', hasMusic ? '<a class="music-link" href="' + base + '/music">Worship playlist</a>' : '')
     : branded);
 }
 
@@ -102,7 +104,14 @@ async function channelRequest(request, env, { path, base, authorized, account })
   if ((path === '/watch/' || (base && path === '/')) && method === 'GET') {
     return Response.redirect(new URL(base + '/watch', request.url), 308);
   }
-  if (path === '/watch' && method === 'GET') return channelPage('watch', base, await readBranding(env.BUCKET, base));
+  if (path === '/watch' && method === 'GET') {
+    const [branding, hasMusic] = await Promise.all([readBranding(env.BUCKET, base), musicIsPublished(env.BUCKET)]);
+    return channelPage('watch', base, branding, hasMusic);
+  }
+  if (['/music', '/music/manage'].includes(path) && method === 'GET') {
+    return musicPage(request, env.BUCKET, base, { manage: path === '/music/manage', owner: authorized, account });
+  }
+  if (path === '/api/music') return musicApi(request, env.BUCKET, authorized, account);
   if (path === '/logo' && method === 'GET') return logoResponse(request, env.BUCKET);
   if (path === '/api/pilot/event' && method === 'POST') return pilotEvent(request, env);
   if (path === '/api/broadcast' && method === 'GET') {

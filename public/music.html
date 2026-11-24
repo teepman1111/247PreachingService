@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!-- music:title --></title>
+<!-- music:font-link -->
+<style>
+  :root { color-scheme: light; --paper: #f7f4eb; --card: #fffdf7; --ink: #202e26; --muted: #59635a; --line: #dcded0; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 1rem/1.5 system-ui, sans-serif; }
+  main { width: min(100% - 2rem, 64rem); margin: 0 auto; padding-bottom: 4rem; }
+  header, .actions, .song-links, .card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem 1rem; }
+  header { min-height: 4.5rem; padding: .7rem 0; justify-content: space-between; }
+  header nav { display: flex; flex-wrap: wrap; gap: .65rem 1rem; }
+  header strong { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; font: 1.45rem/1.15 var(--channel-font); }
+  header img { max-width: min(8rem, 30vw); max-height: 3rem; object-fit: contain; }
+  a { color: inherit; text-underline-offset: .2em; }
+  :focus-visible { outline: 2px solid #476e56; outline-offset: 4px; }
+  .hero { border-radius: 1rem; background: var(--channel-primary); color: var(--channel-on-primary); padding: clamp(1.35rem, 5vw, 3.5rem); }
+  h1, h2, h3, p { margin: 0; overflow-wrap: anywhere; }
+  h1 { font: clamp(2.1rem, 6vw, 4rem)/1.06 var(--channel-font); }
+  .intro { max-width: 46rem; margin-top: .75rem; white-space: pre-line; }
+  h2 { font: 1.5rem/1.15 var(--channel-font); }
+  h3 { font: 1.3rem/1.2 var(--channel-font); }
+  .player, .editor-card { margin-top: 1rem; padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--line); border-radius: .9rem; background: var(--card); }
+  .player iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: .65rem; background: #121915; }
+  .player-title { margin: 0 0 .7rem; }
+  .songs { list-style: none; padding: 0; margin: 1rem 0 0; }
+  .song { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .65rem 1rem; padding: .9rem 1.05rem; border-bottom: 1px solid var(--line); }
+  .song:nth-child(odd) { background: var(--card); }
+  .song p, .muted { color: var(--muted); }
+  .song-links a { min-height: 2.5rem; display: inline-flex; align-items: center; }
+  button { min-height: 2.65rem; cursor: pointer; padding: .5rem .85rem; border: 1px solid #a0ab9b; border-radius: .55rem; background: #edf0e7; color: var(--ink); font: inherit; font-weight: 650; }
+  button:hover { text-decoration: underline; }
+  button:disabled { opacity: .55; cursor: default; }
+  .primary, .song-links button { background: var(--channel-accent); color: var(--channel-on-accent); border-color: currentColor; }
+  button[aria-pressed="true"] { background: var(--channel-primary); color: var(--channel-on-primary); }
+  form { margin-top: .85rem; }
+  fieldset { margin: 0; padding: 0; min-width: 0; border: 0; }
+  label { display: grid; gap: .25rem; font-weight: 600; }
+  input, textarea { display: block; width: 100%; min-width: 0; padding: .55rem .65rem; color: inherit; background: #fff; border: 1px solid #9eab9e; border-radius: .45rem; font: inherit; }
+  textarea { min-height: 4.6rem; resize: vertical; }
+  .fields { display: grid; gap: .7rem; }
+  .track-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr)); }
+  .track { margin-top: 1rem; padding: .85rem; border: 1px solid var(--line); border-radius: .65rem; }
+  .track h3 { margin-bottom: .65rem; }
+  .card-actions { margin-top: .7rem; }
+  .actions { margin-top: 1rem; }
+  .editor-card > p, #publication { margin-top: .55rem; }
+  #access-status:empty, #editor-status:empty { display: none; }
+  #access-status, #editor-status { margin-top: .75rem; }
+  #access-link:not(:empty) { margin-top: 1rem; }
+</style>
+<body style="<!-- music:theme -->">
+<main data-mode="<!-- music:mode -->" data-base="<!-- music:base -->">
+  <header>
+    <strong><!-- music:logo --><!-- music:church --></strong>
+    <nav aria-label="Church channel">
+      <a href="<!-- music:watch -->">Sermon channel</a>
+      <!-- music:music-nav -->
+    </nav>
+  </header>
+  <section class="hero">
+    <h1><!-- music:heading --></h1>
+    <!-- music:note -->
+  </section>
+  <div id="access-link"><!-- music:access-link --></div>
+  <section class="player" id="song-player" aria-label="Song player" hidden>
+    <h2 class="player-title" id="player-title"></h2>
+    <div id="video"></div>
+  </section>
+  <!-- music:songs -->
+  <div id="workspace"<!-- music:editor -->>
+    <section class="editor-card">
+      <h2>Prepare the playlist</h2>
+      <p id="publication" class="muted"></p>
+      <form id="playlist-form">
+        <fieldset id="playlist-fields" disabled>
+          <div class="fields">
+            <label>Playlist title<input required name="playlistTitle" maxlength="80"></label>
+            <label>Note for the congregation<textarea name="note" maxlength="300" placeholder="Songs we’ll sing this Sunday"></textarea></label>
+          </div>
+          <div id="tracks"></div>
+          <div class="actions">
+            <button type="button" id="add-track">Add song</button>
+            <button type="submit" value="save">Save draft</button>
+            <button type="submit" value="publish" class="primary">Publish playlist</button>
+            <button type="button" id="unpublish" hidden>Unpublish</button>
+          </div>
+        </fieldset>
+      </form>
+      <p id="editor-status" role="status"></p>
+    </section>
+    <section class="editor-card">
+      <h2>Share with the congregation</h2>
+      <div class="actions">
+        <a id="public-link" href="<!-- music:link -->">Open public playlist</a>
+        <button type="button" id="copy-public">Copy playlist link</button>
+      </div>
+      <p class="muted" id="share-status" role="status"></p>
+    </section>
+    <section class="editor-card"<!-- music:owner-fields -->>
+      <h2>Music director access</h2>
+      <p>Enter the email your music director uses to sign in with ChatGPT, then share the editor link with them.</p>
+      <form id="director-form">
+        <fieldset id="director-fields" disabled>
+          <label>Music director email<input type="email" name="email" maxlength="254"></label>
+          <div class="actions">
+            <button type="submit">Save access</button>
+            <button id="remove-director" type="button" hidden>Remove access</button>
+            <button id="copy-editor" type="button">Copy editor link</button>
+          </div>
+        </fieldset>
+      </form>
+      <p id="access-status" role="status"></p>
+    </section>
+  </div>
+  <template id="track-template">
+    <section class="track">
+      <h3></h3>
+      <div class="fields track-fields">
+        <label>Song title<input name="title" maxlength="100" required></label>
+        <label>Artist or arrangement<input name="artist" maxlength="100"></label>
+        <label>YouTube link or video ID<input name="youtube" maxlength="512"></label>
+        <label>Spotify song link<input name="spotify" type="url" maxlength="512"></label>
+        <label>Apple Music song link<input name="apple" type="url" maxlength="512"></label>
+      </div>
+      <div class="card-actions">
+        <button type="button" data-action="up">Move up</button>
+        <button type="button" data-action="down">Move down</button>
+        <button type="button" data-action="remove">Remove</button>
+      </div>
+    </section>
+  </template>
+</main>
+<script>
+  const element = id => document.getElementById(id);
+  const { mode, base } = document.querySelector('main').dataset;
+  const playButtons = [...document.querySelectorAll('[data-video]')];
+
+  function selectVideo(button, fromClick) {
+    const player = element('song-player');
+    for (const other of playButtons) other.setAttribute('aria-pressed', String(other === button));
+    if (element('video').firstElementChild?.dataset.video !== button.dataset.video) {
+      const frame = document.createElement('iframe');
+      frame.title = button.dataset.name + ' on YouTube';
+      frame.dataset.video = button.dataset.video;
+      frame.src = 'https://www.youtube.com/embed/' + button.dataset.video;
+      frame.allow = 'encrypted-media; picture-in-picture';
+      frame.allowFullscreen = true;
+      frame.referrerPolicy = 'strict-origin-when-cross-origin';
+      if (!fromClick) frame.loading = 'lazy';
+      element('video').replaceChildren(frame);
+    }
+    element('player-title').textContent = button.dataset.name;
+    player.hidden = false;
+    if (fromClick) {
+      player.scrollIntoView({ block: 'start' });
+      element('video').firstElementChild.focus({ preventScroll: true });
+    }
+  }
+
+  for (const button of playButtons) button.onclick = () => selectVideo(button, true);
+  if (playButtons.length) selectVideo(playButtons[0], false);
+
+  if (mode === 'manage') {
+    const form = element('playlist-form');
+    const directorForm = element('director-form');
+    const tracks = element('tracks');
+    const status = element('editor-status');
+    const accessStatus = element('access-status');
+    const fields = ['title', 'artist', 'youtube', 'spotify', 'apple'];
+    let state;
+
+    function updatePositions() {
+      [...tracks.children].forEach((card, index) => {
+        card.querySelector('h3').textContent = 'Song ' + (index + 1);
+        card.querySelector('[data-action="up"]').disabled = index === 0;
+        card.querySelector('[data-action="down"]').disabled = index === tracks.children.length - 1;
+      });
+      element('add-track').disabled = tracks.children.length >= 25;
+    }
+
+    function addTrack(song = {}) {
+      const card = element('track-template').content.firstElementChild.cloneNode(true);
+      for (const field of fields) {
+        card.querySelector('[name="' + field + '"]').value = song[field] ?? '';
+      }
+      card.addEventListener('click', event => {
+        const action = event.target.dataset.action;
+        if (action === 'up' && card.previousElementSibling) card.previousElementSibling.before(card);
+        if (action === 'down' && card.nextElementSibling) card.nextElementSibling.after(card);
+        if (action === 'remove') card.remove();
+        if (action) updatePositions();
+      });
+      tracks.append(card);
+      updatePositions();
+      return card;
+    }
+
+    function displayState(resetDraft) {
+      const { draft, publishedAt, directorEmail } = state;
+      if (resetDraft) {
+        form.elements.playlistTitle.value = draft.title;
+        form.elements.note.value = draft.note;
+        tracks.replaceChildren();
+        draft.songs.forEach(addTrack);
+        updatePositions();
+      }
+      element('publication').textContent = publishedAt
+        ? 'Published ' + new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(publishedAt))
+        : 'The public playlist is empty until you publish.';
+      element('unpublish').hidden = !publishedAt;
+      if (directorEmail !== undefined) {
+        directorForm.elements.email.value = directorEmail;
+        element('remove-director').hidden = !directorEmail;
+      }
+    }
+
+    async function musicApi(input) {
+      const response = await fetch(base + '/api/music', input
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
+        : { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not load the playlist.');
+      return result;
+    }
+
+    function setBusy(busy) {
+      element('playlist-fields').disabled = busy;
+      element('director-fields').disabled = busy;
+    }
+
+    async function update(input, feedback, message, resetDraft = false) {
+      if (!state) return;
+      setBusy(true);
+      feedback.textContent = 'Saving…';
+      try {
+        state = await musicApi({ ...input, revision: state.revision });
+        displayState(resetDraft);
+        feedback.textContent = message;
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    element('add-track').onclick = () => addTrack().querySelector('input').focus();
+    form.onsubmit = event => {
+      event.preventDefault();
+      const action = event.submitter?.value || 'save';
+      const songs = [...tracks.children].map(card => Object.fromEntries(
+        fields.map(field => [field, card.querySelector('[name="' + field + '"]').value])
+      ));
+      const playlist = { title: form.elements.playlistTitle.value, note: form.elements.note.value, songs };
+      update({ action, playlist }, status, action === 'publish' ? 'Playlist published.' : 'Draft saved.', true);
+    };
+    element('unpublish').onclick = () => update({ action: 'unpublish' }, status, 'Playlist unpublished.');
+    directorForm.onsubmit = event => {
+      event.preventDefault();
+      update({ action: 'director', email: directorForm.elements.email.value }, accessStatus, 'Music director access saved.');
+    };
+    element('remove-director').onclick = () => update({ action: 'director', email: '' }, accessStatus, 'Music director access removed.');
+
+    async function copyLink(path, feedback) {
+      const url = new URL(base + path, location.origin).href;
+      try {
+        await navigator.clipboard.writeText(url);
+        feedback.textContent = 'Link copied.';
+      } catch {
+        feedback.textContent = url;
+      }
+    }
+    element('copy-public').onclick = () => copyLink('/music', element('share-status'));
+    element('copy-editor').onclick = () => copyLink('/music/manage', accessStatus);
+
+    musicApi().then(result => {
+      state = result;
+      displayState(true);
+      setBusy(false);
+    }).catch(error => { status.textContent = error.message; });
+  }
+</script>
+</body>
+</html>

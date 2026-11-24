@@ -19,11 +19,12 @@ export function pastorDashboard(account, tenant, legacyOwner) {
   const panel = base ? `<section class="card">
     <h2>Your church channel</h2>
     <div class="actions"><a class="button" href="${base}/programming">Manage programming</a>
+    <a href="${base}/music/manage">Manage worship playlist</a>
     <a href="${base}/watch">Open public Watch page</a></div>
   </section>` : account ? setup : '';
   const legacy = legacyOwner ? `<section class="card">
     <h2>Original pilot channel</h2>
-    <div class="actions"><a href="/programming">Manage the original channel</a><a href="/watch">Open original Watch page</a></div>
+    <div class="actions"><a href="/programming">Manage the original channel</a><a href="/music/manage">Manage worship playlist</a><a href="/watch">Open original Watch page</a></div>
   </section>` : '';
   return dashboard.replace('<!-- account-nav -->', account ? signOut : '')
     .replace('<!-- hero-action -->', account ? '' : signIn)
