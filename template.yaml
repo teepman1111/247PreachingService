@@ -1,0 +1,302 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Church Channel on AWS with Cognito, required authenticator MFA, and private storage.
+
+Parameters:
+  CognitoDomainPrefix:
+    Type: String
+    AllowedPattern: '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
+    Description: Choose an available Cognito managed-login domain prefix.
+  YouTubeSecretArn:
+    Type: String
+    Default: ''
+    Description: Optional ARN of a Secrets Manager secret with the YouTube API key as its plain SecretString.
+  AppDomainName:
+    Type: String
+    Default: ''
+    AllowedPattern: '([a-z0-9-]+\.)+[a-z0-9-]+|^$'
+    Description: Optional custom HTTPS hostname. Supply RegionalCertificateArn with it.
+  RegionalCertificateArn:
+    Type: String
+    Default: ''
+    Description: ACM certificate ARN for the custom hostname, in this AWS region.
+
+Rules:
+  CustomDomainCertificate:
+    RuleCondition: !Not [!Equals [!Ref AppDomainName, '']]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref RegionalCertificateArn, '']]
+        AssertDescription: A regional ACM certificate is required for the app domain.
+
+Conditions:
+  HasYouTube: !Not [!Equals [!Ref YouTubeSecretArn, '']]
+  HasCustomDomain: !Not [!Equals [!Ref AppDomainName, '']]
+
+Resources:
+  ChannelData:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: RetirePreviousVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 90
+
+  ChannelDataPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ChannelData
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt ChannelData.Arn, !Sub '${ChannelData.Arn}/*']
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  Sessions:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  TransactionKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Encrypts short-lived Church Channel OAuth transactions.
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+
+  PublicApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-channel'
+      ProtocolType: HTTP
+      DisableExecuteApiEndpoint: !If [HasCustomDomain, true, false]
+
+  CustomDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref AppDomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref RegionalCertificateArn
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  CustomDomainMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    Properties:
+      ApiId: !Ref PublicApi
+      DomainName: !Ref CustomDomain
+      Stage: !Ref PublicStage
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-accounts'
+      UserPoolTier: ESSENTIALS
+      DeletionProtection: ACTIVE
+      UsernameAttributes: [email]
+      UsernameConfiguration:
+        CaseSensitive: false
+      AutoVerifiedAttributes: [email]
+      MfaConfiguration: 'ON'
+      EnabledMfas: [SOFTWARE_TOKEN_MFA]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+        SignInPolicy:
+          AllowedFirstAuthFactors: [PASSWORD]
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref UserPool
+      ManagedLoginVersion: 2
+
+  WebClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: Church Channel
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email]
+      SupportedIdentityProviders: [COGNITO]
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      IdTokenValidity: 1
+      AccessTokenValidity: 1
+      TokenValidityUnits:
+        IdToken: hours
+        AccessToken: hours
+      CallbackURLs:
+        - !If
+          - HasCustomDomain
+          - !Sub 'https://${AppDomainName}/auth/callback'
+          - !Sub 'https://${PublicApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/auth/callback'
+      LogoutURLs:
+        - !If
+          - HasCustomDomain
+          - !Sub 'https://${AppDomainName}/'
+          - !Sub 'https://${PublicApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/'
+
+  ManagedLogin:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref WebClient
+      UseCognitoProvidedValues: true
+
+  LegacyPilotAdministrators:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: legacy-pilot-admin
+      UserPoolId: !Ref UserPool
+
+  Web:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/aws/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      MemorySize: 512
+      Timeout: 28
+      Environment:
+        Variables:
+          APP_ORIGIN: !If
+            - HasCustomDomain
+            - !Sub 'https://${AppDomainName}'
+            - !Sub 'https://${PublicApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+          COGNITO_DOMAIN: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
+          COGNITO_ISSUER: !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${UserPool}'
+          COGNITO_CLIENT_ID: !Ref WebClient
+          COGNITO_USER_POOL_ID: !Ref UserPool
+          DATA_BUCKET: !Ref ChannelData
+          SESSION_TABLE: !Ref Sessions
+          SESSION_SECRET: !Sub '{{resolve:secretsmanager:${TransactionKey}:SecretString}}'
+          YOUTUBE_API_KEY: !If
+            - HasYouTube
+            - !Sub '{{resolve:secretsmanager:${YouTubeSecretArn}:SecretString}}'
+            - ''
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt ChannelData.Arn
+            - Effect: Allow
+              Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+              Resource: !Sub '${ChannelData.Arn}/*'
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:DeleteItem]
+              Resource: !GetAtt Sessions.Arn
+            - Effect: Allow
+              Action: cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
+
+  WebLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Web}'
+      RetentionInDays: 30
+
+  PublicIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PublicApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt Web.Arn
+      PayloadFormatVersion: '2.0'
+
+  PublicRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PublicApi
+      RouteKey: $default
+      Target: !Sub 'integrations/${PublicIntegration}'
+
+  PublicStage:
+    Type: AWS::ApiGatewayV2::Stage
+    DependsOn: PublicRoute
+    Properties:
+      ApiId: !Ref PublicApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 80
+        ThrottlingBurstLimit: 160
+
+  PermitApi:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Web
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${PublicApi}/*'
+
+Outputs:
+  AppUrl:
+    Value: !If
+      - HasCustomDomain
+      - !Sub 'https://${AppDomainName}'
+      - !Sub 'https://${PublicApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  CustomDomainDnsName:
+    Condition: HasCustomDomain
+    Value: !GetAtt CustomDomain.RegionalDomainName
+  CustomDomainDnsZone:
+    Condition: HasCustomDomain
+    Value: !GetAtt CustomDomain.RegionalHostedZoneId
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref WebClient
+  DataBucket:
+    Value: !Ref ChannelData
+  SessionTable:
+    Value: !Ref Sessions

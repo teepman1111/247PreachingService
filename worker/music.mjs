@@ -8,10 +8,9 @@ const emptyPlaylist = { title: 'Worship playlist', note: '', songs: [] };
 const noStore = { 'Cache-Control': 'no-store' };
 const clean = (value, max) => typeof value === 'string' && value.length <= max ? value.trim() : null;
 
-function access(request, owner, account, music) {
+function access(owner, identity, music) {
   if (owner) return 'owner';
-  const email = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
-  return account && email && email === music.directorEmail ? 'director' : null;
+  return identity?.email && identity.email === music.directorEmail ? 'director' : null;
 }
 
 async function readMusic(bucket) {
@@ -97,11 +96,11 @@ function editorState(music, revision, role) {
   };
 }
 
-export async function musicApi(request, bucket, owner, account) {
+export async function musicApi(request, bucket, owner, identity) {
   const respond = (body, status = 200) => Response.json(body, { status, headers: noStore });
   const { music, revision } = await readMusic(bucket);
-  const role = access(request, owner, account, music);
-  if (!role) return respond({ error: 'Music playlist access is required.' }, account ? 403 : 401);
+  const role = access(owner, identity, music);
+  if (!role) return respond({ error: 'Music playlist access is required.' }, identity ? 403 : 401);
   if (request.method === 'GET') return respond(editorState(music, revision, role));
   if (request.method !== 'POST') return respond({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('Origin') !== new URL(request.url).origin ||
@@ -165,11 +164,11 @@ function songList(songs) {
   }).join('') + '</ol>';
 }
 
-export async function musicPage(request, bucket, base, { manage = false, owner, account } = {}) {
+export async function musicPage(request, bucket, base, { manage = false, owner, identity } = {}) {
   const { music } = await readMusic(bucket);
-  const role = manage ? access(request, owner, account, music) : null;
-  if (manage && !role && !account) {
-    return Response.redirect(new URL('/signin-with-chatgpt?return_to=' + encodeURIComponent(base + '/music/manage'), request.url), 303);
+  const role = manage ? access(owner, identity, music) : null;
+  if (manage && !role && !identity) {
+    return Response.redirect(new URL('/auth/login?return_to=' + encodeURIComponent(base + '/music/manage'), request.url), 303);
   }
   const [channel, branding] = await Promise.all([readChannel(bucket), readBranding(bucket, base)]);
   const published = music.published;
@@ -194,7 +193,7 @@ export async function musicPage(request, bucket, base, { manage = false, owner, 
     'editor': manage && role ? '' : ' hidden',
     'owner-fields': role === 'owner' ? '' : ' hidden',
     'access-link': manage && !role
-      ? '<a href="/signout-with-chatgpt?return_to=' + encodeURIComponent(base + '/music/manage') + '" target="_top">Switch account</a>' : '',
+      ? '<a href="/auth/logout">Switch account</a>' : '',
   };
   const html = template.replace(/<!-- music:([\w-]+) -->/g, (_, name) => fragments[name] ?? '');
   return new Response(html, {

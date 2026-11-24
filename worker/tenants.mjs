@@ -3,10 +3,6 @@ import { validateChannel } from './channel.mjs';
 const tenantKey = id => 'channels/' + id + '/identity.json';
 const channelPattern = /^\/c\/([a-z0-9-]+)-([a-f0-9]{24})(\/.*)?$/;
 
-export function accountId(request) {
-  return request.headers.get('oai-authenticated-user-id') || null;
-}
-
 export async function tenantId(account) {
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('church-channel:' + account));
   return Array.from(new Uint8Array(hash).slice(0, 12), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -15,6 +11,15 @@ export async function tenantId(account) {
 export async function findTenant(bucket, id) {
   const object = await bucket.get(tenantKey(id));
   return object ? object.json() : null;
+}
+
+export async function accountTenant(bucket, id) {
+  const direct = await findTenant(bucket, id);
+  if (direct) return direct;
+  const alias = await bucket.get('accounts/' + id + '.json');
+  if (!alias) return null;
+  const { tenantId: linked } = await alias.json();
+  return /^[a-f0-9]{24}$/.test(linked ?? '') ? findTenant(bucket, linked) : null;
 }
 
 export function tenantBase(tenant) {
@@ -57,7 +62,7 @@ export async function createTenant(request, bucket, account) {
   }
 
   const id = await tenantId(account);
-  const existing = await findTenant(bucket, id);
+  const existing = await accountTenant(bucket, id);
   if (existing) return respond({ programming: tenantBase(existing) + '/programming' }, 200);
   const reader = request.body?.getReader();
   if (!reader) return respond({ error: 'Enter a church name and time zone.' }, 400);

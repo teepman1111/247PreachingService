@@ -4,11 +4,19 @@
   "description": "24/7 Preaching - Random biblical preaching videos",
   "private": true,
   "scripts": {
-    "dev": "netlify dev"
+    "build": "node scripts/build-aws.mjs",
+    "test": "node --test"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1176.0",
+    "@aws-sdk/client-dynamodb": "^3.1176.0",
+    "@aws-sdk/client-s3": "^3.1176.0",
     "@netlify/blobs": "^8.1.0",
     "@netlify/functions": "^3.0.0",
+    "jose": "^6.2.18",
     "qrcode-generator": "^1.4.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

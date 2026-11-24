@@ -5,7 +5,7 @@ import { broadcastState } from './broadcast.mjs';
 import { getRandomVideo } from './get-random-video.mjs';
 import { uploadChannel } from './upload-channel.mjs';
 import { pastorDashboard } from './dashboard.mjs';
-import { accountId, createTenant, findTenant, resolveTenant, tenantBase, tenantBucket, tenantId } from './tenants.mjs';
+import { accountTenant, createTenant, resolveTenant, tenantBase, tenantBucket, tenantId } from './tenants.mjs';
 import page from '../public/church.html';
 import sanctuaryArt from '../public/assets/sanctuary.webp';
 import { programRequest, readPlaybackProgram } from './program.mjs';
@@ -22,7 +22,7 @@ function catalog(bucket) {
       do {
         const result = await bucket.list({ cursor });
         blobs.push(...result.objects.filter(object =>
-          !['approved/', 'program/', 'channels/'].some(prefix => object.key.startsWith(prefix))));
+          !['approved/', 'program/', 'channels/', 'accounts/'].some(prefix => object.key.startsWith(prefix))));
         cursor = result.truncated ? result.cursor : undefined;
       } while (cursor);
       return { blobs };
@@ -37,11 +37,6 @@ function catalog(bucket) {
       });
     },
   };
-}
-
-function legacyOwner(request, env, account) {
-  const email = request.headers.get('oai-authenticated-user-email');
-  return Boolean(account && env.SITE_ADMIN_EMAIL && email?.toLowerCase() === env.SITE_ADMIN_EMAIL.toLowerCase());
 }
 
 function pageResponse(html, status = 200) {
@@ -68,7 +63,7 @@ function channelPage(mode, base, branding, hasMusic) {
 function authRequired(request, account) {
   if (!account) {
     const returnPath = new URL(request.url).pathname;
-    return Response.redirect(new URL('/signin-with-chatgpt?return_to=' + encodeURIComponent(returnPath), request.url), 303);
+    return Response.redirect(new URL('/auth/login?return_to=' + encodeURIComponent(returnPath), request.url), 303);
   }
   return pageResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>Church programming</title><main><h1>Church administrator access required</h1><a href="/">Return to the pastor dashboard</a></main></html>', 403);
 }
@@ -99,7 +94,7 @@ async function onAir(env, base) {
   }
 }
 
-async function channelRequest(request, env, { path, base, authorized, account }) {
+async function channelRequest(request, env, { path, base, authorized, identity }) {
   const { method } = request;
   if ((path === '/watch/' || (base && path === '/')) && method === 'GET') {
     return Response.redirect(new URL(base + '/watch', request.url), 308);
@@ -109,9 +104,9 @@ async function channelRequest(request, env, { path, base, authorized, account })
     return channelPage('watch', base, branding, hasMusic);
   }
   if (['/music', '/music/manage'].includes(path) && method === 'GET') {
-    return musicPage(request, env.BUCKET, base, { manage: path === '/music/manage', owner: authorized, account });
+    return musicPage(request, env.BUCKET, base, { manage: path === '/music/manage', owner: authorized, identity });
   }
-  if (path === '/api/music') return musicApi(request, env.BUCKET, authorized, account);
+  if (path === '/api/music') return musicApi(request, env.BUCKET, authorized, identity);
   if (path === '/logo' && method === 'GET') return logoResponse(request, env.BUCKET);
   if (path === '/api/pilot/event' && method === 'POST') return pilotEvent(request, env);
   if (path === '/api/broadcast' && method === 'GET') {
@@ -119,7 +114,7 @@ async function channelRequest(request, env, { path, base, authorized, account })
   }
 
   if (!authorized) {
-    if (['/programming', '/signage', '/invite'].includes(path) && method === 'GET') return authRequired(request, account);
+    if (['/programming', '/signage', '/invite'].includes(path) && method === 'GET') return authRequired(request, identity);
     return Response.json({ error: 'Church admin access is required.' }, { status: 403, headers: noStore });
   }
 
@@ -156,17 +151,17 @@ async function channelRequest(request, env, { path, base, authorized, account })
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, identity = null) {
     const { pathname } = new URL(request.url);
     if (pathname === '/assets/sanctuary.webp' && request.method === 'GET') {
       return new Response(sanctuaryArt, {
         headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=3600' },
       });
     }
-    const account = accountId(request);
-    const originalOwner = legacyOwner(request, env, account);
+    const account = identity?.sub;
+    const originalOwner = identity?.legacyAdmin === true;
     if (pathname === '/' && request.method === 'GET') {
-      const tenant = account ? await findTenant(env.BUCKET, await tenantId(account)) : null;
+      const tenant = account ? await accountTenant(env.BUCKET, await tenantId(account)) : null;
       return pageResponse(pastorDashboard(account, tenant, originalOwner));
     }
     if (pathname === '/api/channels' && request.method === 'POST') return createTenant(request, env.BUCKET, account);
@@ -175,9 +170,10 @@ export default {
       if (!route) return notFound();
       const { tenant, path } = route;
       const base = tenantBase(tenant);
-      const authorized = account && tenant.id === await tenantId(account);
-      return channelRequest(request, { ...env, BUCKET: tenantBucket(env.BUCKET, tenant) }, { path, base, authorized, account });
+      const id = account ? await tenantId(account) : null;
+      const authorized = Boolean(id && (tenant.id === id || tenant.id === (await accountTenant(env.BUCKET, id))?.id));
+      return channelRequest(request, { ...env, BUCKET: tenantBucket(env.BUCKET, tenant) }, { path, base, authorized, identity });
     }
-    return channelRequest(request, env, { path: pathname, base: '', authorized: originalOwner, account });
+    return channelRequest(request, env, { path: pathname, base: '', authorized: originalOwner, identity });
   },
 };
