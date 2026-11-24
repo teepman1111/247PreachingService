@@ -190,6 +190,36 @@
   #weekly-guide li time { min-width: 12rem; color: var(--muted); }
   .public-watch .nav-links { display: none; }
 
+  .church-logo { width: auto; max-width: min(10rem, 32vw); height: auto; max-height: 3rem; object-fit: contain; }
+  .church-logo + .brand-mark { display: none; }
+  .public-watch .brand-name, .public-watch .hero h1, .public-watch .guide-title,
+  .public-watch #weekly-guide h2, .public-watch #now-playing-topic { font-family: var(--channel-font, var(--serif)); }
+  .customized-watch #watch .hero { background: var(--channel-primary); color: var(--channel-on-primary); border-color: transparent; }
+  .customized-watch #watch .hero p { color: inherit; }
+  #watch-tagline:empty { display: none; }
+  .customized-watch #broadcast-controls button { background: var(--channel-accent); color: var(--channel-on-accent); border-color: currentColor; }
+  .customized-watch #broadcast-controls button:hover { text-decoration: underline; }
+
+  #branding-form { display: grid; align-items: stretch; }
+  #branding-form > fieldset { border: 0; min-width: 0; padding: 0; margin: 0; }
+  .branding-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+  .branding-fields { display: grid; gap: .75rem; align-content: start; }
+  .branding-fields > label, .branding-colors label { display: grid; gap: .3rem; }
+  .branding-fields small { font-weight: 400; font-size: .875rem; }
+  .branding-colors { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+  .branding-colors input { width: 100%; height: 2.75rem; padding: .25rem; cursor: pointer; }
+  #brand-preview { min-height: 13rem; border-radius: .75rem; padding: clamp(1.05rem, 3vw, 1.75rem);
+    background: var(--channel-primary, #172c22); color: var(--channel-on-primary, #ffffff); overflow-wrap: anywhere; }
+  #brand-preview-name { display: block; font: 2.2rem/1.06 var(--channel-font, var(--serif)); }
+  #brand-preview-tagline { margin: .65rem 0; }
+  #brand-preview-tagline:empty { margin: .65rem 0 0; }
+  #brand-preview-logo { display: block; max-width: min(100%, 10rem); max-height: 4rem; object-fit: contain; margin-bottom: .75rem; }
+  .brand-preview-accent { display: inline-block; padding: .3rem .65rem; border-radius: 1.25rem;
+    background: var(--channel-accent, #efdba2); color: var(--channel-on-accent, #000000); font-weight: 600; }
+  #branding-status:empty { display: none; }
+  #branding-form .actions { margin-top: .75rem; }
+  @media (max-width: 42rem) { .branding-layout { grid-template-columns: minmax(0, 1fr); } }
+
   @media (max-width: 48rem) {
     .guide { grid-template-columns: 1fr; }
     #program { grid-template-columns: 1fr; }
@@ -209,6 +239,7 @@
 <main>
   <header id="navigation">
     <a class="brand" href="/">
+      <!-- church-logo -->
       <span class="brand-mark" aria-hidden="true"></span>
       <span class="brand-name">24/7 Preaching</span>
     </a>
@@ -261,6 +292,47 @@
         <label>Manage an approved video<select id="catalog-video"></select></label>
         <button type="button" class="secondary" id="toggle-video" disabled>Take off air</button>
       </div>
+    </section>
+    <section class="program-section manual-section" id="channel-branding">
+      <h2>Channel branding</h2>
+      <p class="supporting">Customize your public Watch page and QR announcement slide.</p>
+      <form id="branding-form">
+        <fieldset id="branding-fields" disabled>
+          <div class="branding-layout">
+            <div class="branding-fields">
+              <label>Church logo<input id="brand-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp">
+                <small>PNG, JPG, or WebP up to 1 MB. A transparent background works well.</small>
+              </label>
+              <div><button id="remove-logo" class="secondary" type="button" hidden>Remove logo</button></div>
+              <label>Heading font<select name="font">
+                <option value="classic">Classic serif</option>
+                <option value="modern">Modern sans serif</option>
+                <option value="traditional">Traditional serif</option>
+                <option value="warm">Humanist sans serif</option>
+              </select></label>
+              <div class="branding-colors">
+                <label>Primary color<input name="primary" type="color" value="#172c22"></label>
+                <label>Accent color<input name="accent" type="color" value="#efdba2"></label>
+              </div>
+              <label>Tagline<input name="tagline" maxlength="120" placeholder="Sunday’s teaching, all week"></label>
+            </div>
+            <div>
+              <p class="guide-label">Branding preview</p>
+              <div id="brand-preview">
+                <img id="brand-preview-logo" alt="" hidden>
+                <strong id="brand-preview-name">24/7 Preaching</strong>
+                <p id="brand-preview-tagline"></p>
+                <span class="brand-preview-accent">Watch this week</span>
+              </div>
+            </div>
+          </div>
+          <div class="actions">
+            <button>Publish branding</button>
+            <button id="reset-branding" class="secondary" type="button">Reset appearance</button>
+          </div>
+        </fieldset>
+        <p id="branding-status" role="status"></p>
+      </form>
     </section>
     <section class="program-section manual-section" id="pilot-report" hidden>
       <h2>Pilot activity</h2>
@@ -320,7 +392,7 @@
   <section id="watch" hidden>
     <div class="hero">
       <h1 id="watch-title">24/7 Preaching</h1>
-      <p>Sermons and teaching throughout the week.</p>
+      <p id="watch-tagline"><!-- church-tagline --></p>
     </div>
     <p id="now-playing-topic" hidden></p>
     <div class="screen"><div id="player"></div></div>
@@ -433,6 +505,122 @@
     return result.total;
   }
 
+  const brandingForm = element('branding-form');
+  const brandingFields = element('branding-fields');
+  const brandingStatus = element('branding-status');
+  const logoInput = element('brand-file');
+  const brandingFonts = {
+    classic: '"Instrument Serif", Georgia, serif',
+    modern: 'system-ui, sans-serif',
+    traditional: 'Georgia, serif',
+    warm: '"Trebuchet MS", system-ui, sans-serif',
+  };
+  let savedBranding, previewLogoUrl;
+  let removeLogo = false;
+
+  function contrastingText(color) {
+    const linear = index => {
+      const value = Number.parseInt(color.slice(index, index + 2), 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * linear(1) + 0.7152 * linear(3) + 0.0722 * linear(5) > 0.179 ? '#000000' : '#ffffff';
+  }
+
+  function renderBrandingPreview() {
+    const preview = element('brand-preview');
+    const fields = brandingForm.elements;
+    preview.style.setProperty('--channel-font', brandingFonts[fields.font.value]);
+    for (const color of ['primary', 'accent']) {
+      preview.style.setProperty('--channel-' + color, fields[color].value);
+      preview.style.setProperty('--channel-on-' + color, contrastingText(fields[color].value));
+    }
+    element('brand-preview-tagline').textContent = fields.tagline.value;
+    const image = element('brand-preview-logo');
+    const logoUrl = previewLogoUrl || (!removeLogo && savedBranding?.logoUrl);
+    image.hidden = !logoUrl;
+    element('remove-logo').hidden = !logoUrl;
+    if (logoUrl) image.src = logoUrl;
+    else image.removeAttribute('src');
+  }
+
+  function discardLogoPreview() {
+    if (previewLogoUrl) URL.revokeObjectURL(previewLogoUrl);
+    previewLogoUrl = null;
+    logoInput.value = '';
+  }
+
+  function loadBrandingFields(branding) {
+    for (const field of ['font', 'primary', 'accent', 'tagline']) brandingForm.elements[field].value = branding[field];
+    renderBrandingPreview();
+  }
+
+  async function loadBranding() {
+    try {
+      savedBranding = await programApi('branding');
+      loadBrandingFields(savedBranding);
+      brandingFields.disabled = false;
+    } catch (error) {
+      brandingStatus.textContent = error.message;
+    }
+  }
+
+  brandingForm.oninput = event => {
+    if (event.target !== logoInput) renderBrandingPreview();
+  };
+
+  logoInput.onchange = () => {
+    if (previewLogoUrl) URL.revokeObjectURL(previewLogoUrl);
+    previewLogoUrl = null;
+    const image = logoInput.files[0];
+    brandingStatus.textContent = '';
+    if (image?.size > 1024 * 1024) {
+      logoInput.value = '';
+      brandingStatus.textContent = 'Choose a logo under 1 MB.';
+    } else if (image) {
+      removeLogo = false;
+      previewLogoUrl = URL.createObjectURL(image);
+    }
+    renderBrandingPreview();
+  };
+
+  element('remove-logo').onclick = () => {
+    discardLogoPreview();
+    removeLogo = true;
+    renderBrandingPreview();
+  };
+
+  element('reset-branding').onclick = () => {
+    discardLogoPreview();
+    removeLogo = true;
+    loadBrandingFields({
+      font: 'classic', primary: '#172c22', accent: '#efdba2',
+      tagline: 'Sermons and teaching throughout the week.',
+    });
+    brandingStatus.textContent = 'Publish branding to apply the defaults.';
+  };
+
+  brandingForm.onsubmit = async event => {
+    event.preventDefault();
+    const data = new FormData(brandingForm);
+    data.set('revision', savedBranding.revision);
+    data.set('removeLogo', String(removeLogo));
+    brandingFields.disabled = true;
+    try {
+      const response = await fetch(channelBase + '/api/program/branding', { method: 'POST', body: data });
+      const branding = await response.json();
+      if (!response.ok) throw new Error(branding.error || 'Could not save the branding.');
+      savedBranding = branding;
+      discardLogoPreview();
+      removeLogo = false;
+      loadBrandingFields(branding);
+      brandingStatus.textContent = 'Branding published.';
+    } catch (error) {
+      brandingStatus.textContent = error.message;
+    } finally {
+      brandingFields.disabled = false;
+    }
+  };
+
   const channelForm = element('channel-form');
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   let channelRevision, channelDirty = false, catalogVideos = [], excludedVideos = [];
@@ -474,6 +662,7 @@
       channelRevision = data.channelRevision;
       document.querySelector('.brand-name').textContent = data.channel.name;
       document.title = data.channel.name + ' · Programming';
+      element('brand-preview-name').textContent = data.channel.name;
       for (const name of ['name', 'timeZone', 'prayerUrl']) channelForm.elements[name].value = data.channel[name];
       airingsList.replaceChildren();
       data.channel.slots.forEach(addAiring);
@@ -719,6 +908,7 @@
     if (link.pathname === location.pathname) link.setAttribute('aria-current', 'page');
   }
   if (mode === 'programming') {
+    loadBranding();
     element('admin').hidden = false;
     const form = element('approve');
     form.onsubmit = async event => {

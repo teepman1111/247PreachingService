@@ -1,3 +1,4 @@
+import { brandingRequest, brandingStyles, customPalette, escapeHtml, logoResponse, readBranding } from './branding.mjs';
 import { invitation, pilotEvent, pilotReport } from './pilot.mjs';
 import { broadcastState } from './broadcast.mjs';
 import { getRandomVideo } from './get-random-video.mjs';
@@ -49,12 +50,16 @@ function pageResponse(html, status = 200) {
   });
 }
 
-function channelPage(mode, base) {
-  const attributes = mode === 'watch' ? ' class="public-watch"' : '';
+function channelPage(mode, base, branding) {
+  const attributes = mode === 'watch' ? ' class="public-watch' +
+    (customPalette(branding) ? ' customized-watch' : '') + '" style="' + escapeHtml(brandingStyles(branding)) + '"' : '';
   const branded = page.replace('<main>', '<main' + attributes + ' data-channel-base="' + base + '" data-mode="' + mode + '">')
     .replace(/href="\/(watch|signage|invite|programming)"/g, (_, path) => 'href="' + base + '/' + path + '"');
   return pageResponse(mode === 'watch'
     ? branded.replace('class="brand" href="/"', 'class="brand" href="' + base + '/watch"')
+      .replace('<!-- church-logo -->', branding.logoUrl
+        ? '<img class="church-logo" src="' + escapeHtml(branding.logoUrl) + '" alt="">' : '')
+      .replace('<!-- church-tagline -->', () => escapeHtml(branding.tagline))
     : branded);
 }
 
@@ -97,7 +102,8 @@ async function channelRequest(request, env, { path, base, authorized, account })
   if ((path === '/watch/' || (base && path === '/')) && method === 'GET') {
     return Response.redirect(new URL(base + '/watch', request.url), 308);
   }
-  if (path === '/watch' && method === 'GET') return channelPage('watch', base);
+  if (path === '/watch' && method === 'GET') return channelPage('watch', base, await readBranding(env.BUCKET, base));
+  if (path === '/logo' && method === 'GET') return logoResponse(request, env.BUCKET);
   if (path === '/api/pilot/event' && method === 'POST') return pilotEvent(request, env);
   if (path === '/api/broadcast' && method === 'GET') {
     return Response.json(await onAir(env, base), { headers: noStore });
@@ -109,6 +115,7 @@ async function channelRequest(request, env, { path, base, authorized, account })
   }
 
   if (path === '/invite' && method === 'GET') return invitation(request, env, base);
+  if (path === '/api/program/branding') return brandingRequest(request, env.BUCKET, base);
   if (path === '/api/pilot/report' && method === 'GET') return pilotReport(env);
   if (path === '/api/playback' && method === 'GET') {
     const { videoIds, selection, excluded } = await readPlaybackProgram(env.BUCKET);

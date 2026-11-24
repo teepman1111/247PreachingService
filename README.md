@@ -121,3 +121,9 @@ via YouTube embeds.
 The original pilot keeps its existing `/watch` link and its own storage.
 Its administrator can reach it from the shared dashboard or at `/programming`.
 The `SITE_ADMIN_EMAIL` secret continues to apply to the original pilot.
+
+Open **Channel branding** in Programming to upload a church logo (PNG, JPG,
+or WebP up to 1 MB), choose a heading font and two colors, and add a tagline.
+The preview updates as you edit. **Publish branding** applies the appearance
+to that church's Watch page and QR announcement slide. Changes leave the
+Watch link and programming intact.

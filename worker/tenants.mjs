@@ -34,6 +34,7 @@ export function tenantBucket(bucket, tenant) {
   return {
     channelDefaults: tenant.channelDefaults,
     get: key => bucket.get(prefix + key),
+    head: key => bucket.head(prefix + key),
     put: (key, value, options) => bucket.put(prefix + key, value, options),
     delete: key => bucket.delete(prefix + key),
     async list(options) {
